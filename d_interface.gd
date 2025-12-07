@@ -59,14 +59,16 @@ func _unregister_shortcut() -> void:
 		InputMap.erase_action(CHECK_ALL_ACTION)
 
 
-## @brief インターフェース定義チェック処理
-## @details プロジェクト内のGDScriptファイルを走査しインターフェース定義を検証する処理
 func _check_interface_define_all() -> void:
 	print("----------------- begin interface defines check -----------------")
-	var dir := DirAccess.open("res://")
+	_check_interface_define_at("res://")
+
+
+func _check_interface_define_at(dir_str: String) -> void:
+	var dir := DirAccess.open(dir_str)
 	if dir:
 		var err_count := 0
-		var scripts := _list_gd_files_recursive(dir, "res://", ["addons"])
+		var scripts := _list_gd_files_recursive(dir, ["addons"])
 		for path in scripts:
 			var res := load(path)
 			if res is GDScript:
@@ -107,14 +109,12 @@ static func _check_interface_define(obj: Object) -> PackedStringArray:
 
 ## @brief GDScriptファイル探索処理
 ## @param dir 探索対象ディレクトリ
-## @param path 現在のパス
 ## @param excluded_dirs 除外ディレクトリ配列
 ## @return 探索されたGDScriptファイルパス配列
 ## @details 指定ディレクトリ以下のGDScriptファイルを再帰的に探索する処理
-static func _list_gd_files_recursive(
-	dir: DirAccess, path: String, excluded_dirs: Array[String]
-) -> Array[String]:
+static func _list_gd_files_recursive(dir: DirAccess, excluded_dirs: Array[String]) -> Array[String]:
 	var ret: Array[String]
+	var path := dir.get_current_dir()
 	dir.list_dir_begin()
 	var file_name := dir.get_next()
 	while file_name != "":
@@ -128,7 +128,7 @@ static func _list_gd_files_recursive(
 				var sub_dir := DirAccess.open(sub_path)
 				if sub_dir:
 					# 再帰呼び出しの結果を蓄積する
-					ret.append_array(_list_gd_files_recursive(sub_dir, sub_path, excluded_dirs))
+					ret.append_array(_list_gd_files_recursive(sub_dir, excluded_dirs))
 		else:
 			if file_name.ends_with(".gd"):
 				ret.append(path + "/" + file_name)
