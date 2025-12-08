@@ -5,8 +5,15 @@
 ## 内部処理による一貫したチェック状態更新とエラー管理
 extends RefCounted
 
-var is_checked: bool = false
-var errors: PackedStringArray = PackedStringArray()
+const ERROR = preload("uid://c4n13cyd88clu")
+
+var is_checked: bool
+var errors: Array[ERROR.Error]
+
+
+func _init() -> void:
+	is_checked = false
+	errors.clear()
 
 
 ## チェック済み状態に設定
@@ -20,17 +27,17 @@ func has_error() -> bool:
 
 
 ## 単一エラーを追加
-func add_error(e: String) -> void:
+func add_error(e: ERROR.Error) -> void:
 	_mark_checked_with_error([e])
 
 
 ## 複数エラーを追加
-func add_errors(e: Array) -> void:
+func add_errors(e: Array[ERROR.Error]) -> void:
 	if not e.is_empty():
 		_mark_checked_with_error(e)
 
 
 ## 内部処理: チェック済み設定とエラー追加
-func _mark_checked_with_error(e: Array) -> void:
+func _mark_checked_with_error(e: Array[ERROR.Error]) -> void:
 	set_checked()
 	errors.append_array(e)

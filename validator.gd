@@ -1,6 +1,7 @@
 extends Object
 
 const CHECK_RESULT = preload("uid://ck862o06krlja")
+const ERROR = preload("uid://c4n13cyd88clu")
 
 
 # ------------- [Defines] -------------
@@ -27,21 +28,17 @@ static var _base_signal: Dictionary[GDScript, Array] = {}
 ## @return 差分エラー一覧
 static func _validate_prop(
 	expected_prop: Variant, actual_prop: Variant, skip_name_check: bool
-) -> PackedStringArray:
-	var ret: PackedStringArray = []
+) -> Array[ERROR.Error]:
+	var ret: Array[ERROR.Error] = []
 	# 名前チェック
 	if not skip_name_check and expected_prop.name != actual_prop.name:
-		ret.append(
-			"name is different: expect {0}, actual {1}".format(
-				[expected_prop.name, actual_prop.name]
-			)
-		)
+		ret.append(ERROR.ErrorPropertyNameDiffer.new(expected_prop.name, actual_prop.name))
 
 	# 型チェック
 	if expected_prop.type != actual_prop.type:
 		ret.append(
-			"type is different: expect {0}, actual {1}".format(
-				[type_string(expected_prop.type), type_string(actual_prop.type)]
+			ERROR.ErrorPropertyTypeDiffer.new(
+				expected_prop.name, expected_prop.type, actual_prop.type
 			)
 		)
 	return ret
@@ -54,23 +51,35 @@ static func _validate_prop(
 ## @return 差分エラー一覧
 static func _validate_method(
 	expected_method: Variant, actual_method: Variant, skip_default_arg: bool
-) -> PackedStringArray:
-	var err: PackedStringArray = []
+) -> Array[ERROR.Error]:
+	var err: Array[ERROR.Error] = []
 	# 引数の数
 	var expected_arg_count: int = expected_method.args.size()
 	var actual_arg_count: int = actual_method.args.size()
 	if expected_arg_count != actual_arg_count:
-		err.append(
-			'method "{0}" args count differs expected: {1}, actual: {2}'.format(
-				[expected_method.name, expected_arg_count, actual_arg_count]
-			)
-		)
+		err.append(ERROR.ErrorDifferMethodArgumentNum.new(expected_arg_count, actual_arg_count))
 	else:
 		# 各引数のプロパティ（名前、型）を比較
 		for i in range(expected_arg_count):
-			var diffs := _validate_prop(expected_method.args[i], actual_method.args[i], true)
-			for d in diffs:
-				err.append('method "{0}" arg[{1}] {2}'.format([expected_method.name, i, d]))
+			var arg_expected = expected_method.args[i]
+			var arg_actual = actual_method.args[i]
+			# 名前差分（参考情報としてメッセージ化）
+			if arg_expected.name != arg_actual.name:
+				err.append(
+					ERROR.ErrorMethodArgPropertyDiffer.new(
+						expected_method.name,
+						i,
+						(
+							"name differs: expected='%s', actual='%s'"
+							% [arg_expected.name, arg_actual.name]
+						)
+					)
+				)
+			# 型差分は型不一致エラーとして
+			if arg_expected.type != arg_actual.type:
+				err.append(
+					ERROR.ErrorInvalidMethodArgumentType.new(arg_expected.type, arg_actual.type)
+				)
 
 	if not skip_default_arg:
 		# デフォルト引数の数（もし指定されていれば）
@@ -78,8 +87,8 @@ static func _validate_method(
 		var actual_default_count: int = actual_method.default_args.size()
 		if expected_default_count != actual_default_count:
 			err.append(
-				'method "{0}" default args count differs expected: {1}, actual: {2}'.format(
-					[expected_method.name, expected_default_count, actual_default_count]
+				ERROR.ErrorMethodDefaultArgCountMismatch.new(
+					expected_method.name, expected_default_count, actual_default_count
 				)
 			)
 		else:
@@ -89,16 +98,20 @@ static func _validate_method(
 				var actual_val = actual_method.default_args[i]
 				if expected_val != actual_val:
 					err.append(
-						(
-							'method "{0}" default arg[{1}] type differs expected: {2}, actual: {3}'
-							. format([expected_method.name, i, expected_val, actual_val])
+						ERROR.ErrorMethodDefaultArgValueMismatch.new(
+							expected_method.name, i, expected_val, actual_val
 						)
 					)
 
-	# 戻り値の型／名前を Property 経由で比較
-	var ret_diffs := _validate_prop(expected_method.return, actual_method.return, true)
-	for d in ret_diffs:
-		err.append('method "{0}" return {1}'.format([expected_method.name, d]))
+	# 戻り値の型を Property 経由で比較（名前は比較しない）
+	var expected_ret = expected_method.return
+	var actual_ret = actual_method.return
+	if expected_ret.type != actual_ret.type:
+		err.append(
+			ERROR.ErrorMethodReturnTypeDiffer.new(
+				expected_method.name, expected_ret.type, actual_ret.type
+			)
+		)
 	return err
 
 
@@ -170,9 +183,9 @@ static func validate(res: CHECK_RESULT, target_obj: Object, interface_type: GDSc
 	if not _base_interface_instance:
 		_base_interface_instance = InterfaceBase.new()
 
-	res.add_array(validate_method(target_obj, interface_type))
-	res.add_array(validate_signal(target_obj, interface_type))
-	res.add_array(validate_property(target_obj, interface_type))
+	res.add_errors(validate_method(target_obj, interface_type))
+	res.add_errors(validate_signal(target_obj, interface_type))
+	res.add_errors(validate_property(target_obj, interface_type))
 
 
 ## 配列差分作成
@@ -196,22 +209,56 @@ static func _array_subtract(source_array: Array, subtract_array: Array) -> Array
 ## @param target_obj 検証対象オブジェクト
 ## @param interface_type インタフェーススクリプト型
 ## @return エラー一覧
-static func validate_signal(target_obj: Object, interface_type: GDScript) -> PackedStringArray:
+static func validate_signal(target_obj: Object, interface_type: GDScript) -> Array[ERROR.Error]:
 	# オブジェクトのシグナル一覧を辞書化
 	# キーにシグナル名、値にシグナル情報を保持(検索用)
 	var obj_signal_map: Dictionary[String, Dictionary] = {}
 	for signal_info in target_obj.get_signal_list():
 		obj_signal_map[signal_info.name] = signal_info
 
-	var err: PackedStringArray = []
+	var err: Array[ERROR.Error] = []
 	# インタフェース型に基づく期待シグナル一覧を走査
 	for expected_signal in _prepare_base_signal(interface_type):
 		if expected_signal.name not in obj_signal_map:
-			err.append('signal "{0}" not found'.format([expected_signal.name]))
+			err.append(ERROR.ErrorSignalNotFound.new(expected_signal.name))
 			continue
 
 		var actual_signal := obj_signal_map[expected_signal.name]
-		err.append_array(_validate_method(expected_signal, actual_signal, false))
+		# 引数数
+		var expected_arg_count: int = expected_signal.args.size()
+		var actual_arg_count: int = actual_signal.args.size()
+		if expected_arg_count != actual_arg_count:
+			err.append(ERROR.ErrorDifferSignalArgumentNum.new(expected_arg_count, actual_arg_count))
+		else:
+			for i in range(expected_arg_count):
+				var arg_expected = expected_signal.args[i]
+				var arg_actual = actual_signal.args[i]
+				if arg_expected.name != arg_actual.name:
+					err.append(
+						ERROR.ErrorSignalArgPropertyDiffer.new(
+							expected_signal.name,
+							i,
+							(
+								"name differs: expected='%s', actual='%s'"
+								% [arg_expected.name, arg_actual.name]
+							)
+						)
+					)
+				if arg_expected.type != arg_actual.type:
+					err.append(
+						ERROR.ErrorInvalidSignalArgumentType.new(arg_expected.type, arg_actual.type)
+					)
+
+		# 戻り値型（シグナルの場合は通常 void だが、辞書にあれば比較）
+		if "return" in expected_signal and "return" in actual_signal:
+			var expected_ret = expected_signal.return
+			var actual_ret = actual_signal.return
+			if expected_ret.type != actual_ret.type:
+				err.append(
+					ERROR.ErrorSignalReturnTypeDiffer.new(
+						expected_signal.name, expected_ret.type, actual_ret.type
+					)
+				)
 	return err
 
 
@@ -219,22 +266,18 @@ static func validate_signal(target_obj: Object, interface_type: GDScript) -> Pac
 ## @param target_obj 検証対象オブジェクト
 ## @param interface_type インタフェーススクリプト型
 ## @return エラー一覧
-static func validate_property(target_obj: Object, interface_type: GDScript) -> PackedStringArray:
+static func validate_property(target_obj: Object, interface_type: GDScript) -> Array[ERROR.Error]:
 	# オブジェクトのプロパティ一覧を辞書化
 	# キーにプロパティ名、値にプロパティ情報を保持(検索用)
 	var obj_property_map: Dictionary[String, Dictionary] = {}
 	for prop_info in target_obj.get_property_list():
 		obj_property_map[prop_info.name] = prop_info
 
-	var err: PackedStringArray = []
+	var err: Array[ERROR.Error] = []
 	# インタフェース型に基づく期待プロパティ一覧を走査
 	for expected_prop in _prepare_base_property(interface_type):
 		if expected_prop.name not in obj_property_map:
-			err.append(
-				'property "{0}" not found (type={1})'.format(
-					[expected_prop.name, type_string(expected_prop.type)]
-				)
-			)
+			err.append(ERROR.ErrorPropertyNotFound.new(expected_prop.name))
 			continue
 
 		var actual_prop := obj_property_map[expected_prop.name]
@@ -247,19 +290,19 @@ static func validate_property(target_obj: Object, interface_type: GDScript) -> P
 ## @param target_obj 検証対象オブジェクト
 ## @param interface_type インタフェーススクリプト型
 ## @return エラー一覧
-static func validate_method(target_obj: Object, interface_type: GDScript) -> PackedStringArray:
+static func validate_method(target_obj: Object, interface_type: GDScript) -> Array[ERROR.Error]:
 	# オブジェクトのメソッド一覧を辞書化
 	# キーにメソッド名、値にメソッド情報を保持(検索用)
 	var obj_method_map: Dictionary[String, Dictionary] = {}
 	for method_info in target_obj.get_method_list():
 		obj_method_map[method_info.name] = method_info
 
-	var err: PackedStringArray = []
+	var err: Array[ERROR.Error] = []
 	# インタフェース型に基づく期待メソッド一覧を走査
 	for expected_method in _prepare_base_method(interface_type):
 		# 期待メソッドが対象オブジェクトに存在しない場合
 		if expected_method.name not in obj_method_map:
-			err.append('method "{0}" not found'.format([expected_method.name]))
+			err.append(ERROR.ErrorMethodNotFound.new(expected_method.name))
 			continue
 
 		# 実際のメソッド情報を取得

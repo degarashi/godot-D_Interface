@@ -6,6 +6,7 @@ const VALIDATOR = preload("uid://b4t2yue08ojax")
 # ショートカットアクション名
 const CHECK_ALL_ACTION = "check_interface_all"
 const CHECK_RESULT = preload("uid://ck862o06krlja")
+const ERROR = preload("uid://c4n13cyd88clu")
 
 
 ## @brief プラグイン有効化処理
@@ -80,8 +81,8 @@ func _check_interface_define_at(dir_str: String) -> void:
 					print("\tNo Error")
 				else:
 					err_count += 1
-					for e in res.errors:
-						push_error(e)
+					for e in chk_res.errors:
+						push_error(e.as_string())
 		print("{0} error(s) found.".format([err_count if err_count > 0 else "No"]))
 
 
@@ -98,7 +99,7 @@ static func _check_interface_define(obj: Object) -> CHECK_RESULT:
 	var if_a := obj.call(Interface.IMPL_LIST_NAME)
 	for interface_gdscr in if_a:
 		if not is_instance_of(interface_gdscr, GDScript):
-			res.add_error("Interface implementation must be a GDScript, but found invalid type.")
+			res.add_error(ERROR.InvalidInterface.new(interface_gdscr))
 		VALIDATOR.validate(res, obj, interface_gdscr)
 	return res
 
