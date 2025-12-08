@@ -75,15 +75,16 @@ func _check_interface_define_at(dir_str: String) -> void:
 			var res := load(path)
 			if res is GDScript:
 				var scr: GDScript = res
-				print("Interface Check... {0}".format([path]))
 				var chk_res := _check_interface_define(scr.new())
-				if not chk_res.has_error():
-					print("\tNo Error")
-				else:
+				if chk_res.has_error():
+					# エラーがあるファイルのみ表示
+					print("Interface Check... {0}".format([path]))
 					err_count += 1
 					for e in chk_res.errors:
 						push_error(e.as_string())
-		print("{0} error(s) found.".format([err_count if err_count > 0 else "No"]))
+		# エラーが0の場合は何も表示しない
+		if err_count > 0:
+			print("{0} error(s) found.".format([err_count]))
 
 
 ## @brief インターフェース定義検証処理
@@ -96,6 +97,7 @@ static func _check_interface_define(obj: Object) -> CHECK_RESULT:
 		# Interfaceは何も実装していない
 		return res
 
+	res.set_checked()
 	var if_a := obj.call(Interface.IMPL_LIST_NAME)
 	for interface_gdscr in if_a:
 		if not is_instance_of(interface_gdscr, GDScript):
