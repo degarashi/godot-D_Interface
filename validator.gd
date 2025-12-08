@@ -50,7 +50,7 @@ static func _validate_prop(
 ## @param skip_default_arg デフォルト引数チェックをスキップするフラグ
 ## @return 差分エラー一覧
 static func _validate_method(
-	expected_method: Variant, actual_method: Variant, skip_default_arg: bool
+	expected_method: Variant, actual_method: Variant, skip_arg_name: bool, skip_default_arg: bool
 ) -> Array[ERROR.Error]:
 	var err: Array[ERROR.Error] = []
 	# 引数の数
@@ -64,18 +64,19 @@ static func _validate_method(
 			var arg_expected = expected_method.args[i]
 			var arg_actual = actual_method.args[i]
 			# 名前差分（参考情報としてメッセージ化）
-			if arg_expected.name != arg_actual.name:
-				err.append(
-					ERROR.ErrorMethodArgPropertyDiffer.new(
-						expected_method.name,
-						i,
-						(
-							"name differs: expected='%s', actual='%s'"
-							% [arg_expected.name, arg_actual.name]
+			if not skip_arg_name:
+				if arg_expected.name != arg_actual.name:
+					err.append(
+						ERROR.ErrorMethodArgPropertyDiffer.new(
+							expected_method.name,
+							i,
+							(
+								"name differs: expected='%s', actual='%s'"
+								% [arg_expected.name, arg_actual.name]
+							)
 						)
 					)
-				)
-			# 型差分は型不一致エラーとして
+			# 型差分は型不一致エラー
 			if arg_expected.type != arg_actual.type:
 				err.append(
 					ERROR.ErrorInvalidMethodArgumentType.new(arg_expected.type, arg_actual.type)
@@ -308,5 +309,5 @@ static func validate_method(target_obj: Object, interface_type: GDScript) -> Arr
 		# 実際のメソッド情報を取得
 		var actual_method := obj_method_map[expected_method.name]
 		# 詳細比較検証を実施し、差分エラーを追加
-		err.append_array(_validate_method(expected_method, actual_method, false))
+		err.append_array(_validate_method(expected_method, actual_method, true, true))
 	return err
