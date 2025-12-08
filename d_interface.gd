@@ -76,15 +76,16 @@ func _check_interface_define_at(dir_str: String) -> void:
 			if res is GDScript:
 				var scr: GDScript = res
 				var chk_res := _check_interface_define(scr.new())
-				if chk_res.has_error():
-					# エラーがあるファイルのみ表示
+				if chk_res.is_checked:
 					print("Interface Check... {0}".format([path]))
-					err_count += 1
-					for e in chk_res.errors:
-						push_error(e.as_string())
-		# エラーが0の場合は何も表示しない
+					if chk_res.has_error():
+						err_count += 1
+						for e in chk_res.errors:
+							push_error(e.as_string())
 		if err_count > 0:
 			print("{0} error(s) found.".format([err_count]))
+		else:
+			print("OK")
 
 
 ## @brief インターフェース定義検証処理
