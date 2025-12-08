@@ -1,5 +1,7 @@
 extends Object
 
+const CHECK_RESULT = preload("uid://ck862o06krlja")
+
 
 # ------------- [Defines] -------------
 class ValidateResult:
@@ -164,16 +166,13 @@ static func _prepare_base_signal(interface_type: GDScript) -> Array:
 ## @param target_obj 検証対象オブジェクト
 ## @param interface_type インタフェーススクリプト型
 ## @return 検証結果オブジェクト
-static func validate(target_obj: Object, interface_type: GDScript) -> ValidateResult:
+static func validate(res: CHECK_RESULT, target_obj: Object, interface_type: GDScript) -> void:
 	if not _base_interface_instance:
 		_base_interface_instance = InterfaceBase.new()
 
-	var res := ValidateResult.new()
-	res.error.append_array(validate_method(target_obj, interface_type))
-	res.error.append_array(validate_signal(target_obj, interface_type))
-	res.error.append_array(validate_property(target_obj, interface_type))
-	res.ok = res.error.is_empty()
-	return res
+	res.add_array(validate_method(target_obj, interface_type))
+	res.add_array(validate_signal(target_obj, interface_type))
+	res.add_array(validate_property(target_obj, interface_type))
 
 
 ## 配列差分作成

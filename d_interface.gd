@@ -5,6 +5,7 @@ const MENU_TEXT = "Check Interface Defines"
 const VALIDATOR = preload("uid://b4t2yue08ojax")
 # ショートカットアクション名
 const CHECK_ALL_ACTION = "check_interface_all"
+const CHECK_RESULT = preload("uid://ck862o06krlja")
 
 
 ## @brief プラグイン有効化処理
@@ -74,12 +75,12 @@ func _check_interface_define_at(dir_str: String) -> void:
 			if res is GDScript:
 				var scr: GDScript = res
 				print("Interface Check... {0}".format([path]))
-				var err := _check_interface_define(scr.new())
-				if err.is_empty():
+				var chk_res := _check_interface_define(scr.new())
+				if not chk_res.has_error():
 					print("\tNo Error")
 				else:
 					err_count += 1
-					for e in err:
+					for e in res.errors:
 						push_error(e)
 		print("{0} error(s) found.".format([err_count if err_count > 0 else "No"]))
 
@@ -88,23 +89,18 @@ func _check_interface_define_at(dir_str: String) -> void:
 ## @param obj 検証対象オブジェクト
 ## @return エラーメッセージ配列(エラーが無ければ空配列)
 ## @details インターフェース定義が正しく実装されているかを検証する処理
-static func _check_interface_define(obj: Object) -> PackedStringArray:
+static func _check_interface_define(obj: Object) -> CHECK_RESULT:
+	var res := CHECK_RESULT.new()
 	if not obj.has_method(Interface.IMPL_LIST_NAME):
 		# Interfaceは何も実装していない
-		return []
+		return res
 
-	var err: PackedStringArray
 	var if_a := obj.call(Interface.IMPL_LIST_NAME)
 	for interface_gdscr in if_a:
 		if not is_instance_of(interface_gdscr, GDScript):
-			err.append("Interface implementation must be a GDScript, but found invalid type.")
-		var res := VALIDATOR.validate(obj, interface_gdscr)
-		if not res.ok:
-			for e in res.error:
-				var name = interface_gdscr.get_global_name()
-				err.append("[{0}]: {1}".format([name, e]))
-
-	return err
+			res.add_error("Interface implementation must be a GDScript, but found invalid type.")
+		VALIDATOR.validate(res, obj, interface_gdscr)
+	return res
 
 
 ## @brief GDScriptファイル探索処理

@@ -18,6 +18,7 @@ extends Object
 
 const VALIDATOR = preload("uid://b4t2yue08ojax")
 const IMPL_LIST_NAME = &"implements_list"
+const CHECK_RESULT = preload("uid://ck862o06krlja")
 
 
 ## @brief 実装委譲先のオブジェクトを取得する関数
@@ -55,8 +56,9 @@ static func implemented(obj: Object, t_if: GDScript, detailed: bool = false) -> 
 		return true
 
 	# 詳細判定
-	var err := VALIDATOR.validate(obj, t_if)
-	return err.is_empty()
+	var res := CHECK_RESULT.new()
+	VALIDATOR.validate(res, obj, t_if)
+	return res.has_error()
 
 
 ## @brief 指定されたオブジェクトをインターフェースとしてラップする関数
