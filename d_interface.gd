@@ -78,18 +78,18 @@ func _check_interface_define_at(dir_str: String) -> void:
 				var scr: Script = res
 				var chk_res := _check_interface_define(scr)
 				if chk_res.is_checked:
-					print("Check Result {0}".format([path]))
+					print("{0}".format([path]))
 					if chk_res.has_error():
 						err_count += 1
 						for ifc in chk_res.errors:
 							for e in chk_res.errors[ifc]:
 								push_error(e.as_string())
 					else:
-						print("No Error")
+						print("\tNo Error")
 		if err_count > 0:
 			print("{0} error(s) found.".format([err_count]))
 		else:
-			print("OK")
+			print("----------------- All OK -----------------")
 
 
 ## @brief インターフェース定義検証処理
