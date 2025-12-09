@@ -7,16 +7,10 @@ extends RefCounted
 
 const ERROR = preload("uid://c4n13cyd88clu")
 
-var is_checked: bool
-var errors: Array[ERROR.Error]
+var is_checked: bool = false
+var errors: Dictionary[Script, Array] = {}
 
 
-func _init() -> void:
-	is_checked = false
-	errors.clear()
-
-
-## チェック済み状態に設定
 func set_checked() -> void:
 	is_checked = true
 
@@ -27,17 +21,19 @@ func has_error() -> bool:
 
 
 ## 単一エラーを追加
-func add_error(e: ERROR.Error) -> void:
-	_mark_checked_with_error([e])
+func add_error(ifc: Script, e: ERROR.Error) -> void:
+	_mark_checked_with_error(ifc, [e])
 
 
 ## 複数エラーを追加
-func add_errors(e: Array[ERROR.Error]) -> void:
+func add_errors(ifc: Script, e: Array[ERROR.Error]) -> void:
 	if not e.is_empty():
-		_mark_checked_with_error(e)
+		_mark_checked_with_error(ifc, e)
 
 
 ## 内部処理: チェック済み設定とエラー追加
-func _mark_checked_with_error(e: Array[ERROR.Error]) -> void:
+func _mark_checked_with_error(ifc: Script, e: Array[ERROR.Error]) -> void:
 	set_checked()
-	errors.append_array(e)
+	if ifc not in errors:
+		errors[ifc] = []
+	errors[ifc].append_array(e)

@@ -1,23 +1,10 @@
 extends Object
 
+# ------------- [Constants] -------------
 const CHECK_RESULT = preload("uid://ck862o06krlja")
+const C = preload("uid://beur775onkfdv")
+const CACHE = preload("uid://bgl5faa3wfm4d")
 const ERROR = preload("uid://c4n13cyd88clu")
-
-
-# ------------- [Defines] -------------
-class ValidateResult:
-	var ok: bool
-	var error: PackedStringArray
-
-
-# ------------- [Private Variable] -------------
-@warning_ignore("unused_private_class_variable")
-static var _base_interface_instance: InterfaceBase
-
-# Resourceに元々存在しているメソッドなどを省いたもの
-static var _base_method: Dictionary[GDScript, Array] = {}
-static var _base_property: Dictionary[GDScript, Array] = {}
-static var _base_signal: Dictionary[GDScript, Array] = {}
 
 
 # ------------- [Private Static Method] -------------
@@ -116,126 +103,44 @@ static func _validate_method(
 	return err
 
 
-## ベース情報の準備とキャッシュ構築
-## @param cache_dic タイプ別キャッシュ辞書
-## @param interface_type インタフェーススクリプト型
-## @param getter 対象情報取得コールバック
-## @param checker フィルタリング用チェックコールバック
-## @return キャッシュ配列
-static func _prepare_base(
-	cache_dic: Dictionary[GDScript, Array],
-	interface_type: GDScript,
-	getter_func: Callable,
-	filter_func: Callable = func(_a: Dictionary): return true
-) -> Array:
-	if interface_type not in cache_dic:
-		var tmp_obj: Object = interface_type.new()
-		assert(tmp_obj != null, "interface_type.new() returned null")
-		var ar := _array_subtract(
-			# 対象ObjectからGetした物
-			getter_func.call(tmp_obj),
-			# InterfaceBaseからGetした物
-			getter_func.call(_base_interface_instance)
-		)
-		# フィルタリングした結果を残す
-		cache_dic[interface_type] = ar.filter(filter_func)
-	return cache_dic[interface_type]
-
-
-## Objectに元々備わっている以外のメソッド一覧を準備
-## @param interface_type インタフェーススクリプト型
-## @return 準備済みメソッド配列
-static func _prepare_base_method(interface_type: GDScript) -> Array:
-	return _prepare_base(
-		_base_method,
-		interface_type,
-		func(obj: Object): return obj.get_method_list(),
-		func(m: Dictionary): return not m.name.begins_with("@")
-	)
-
-
-## ベースプロパティ一覧の準備
-## @param interface_type インタフェーススクリプト型
-## @return 準備済みプロパティ配列
-static func _prepare_base_property(interface_type: GDScript) -> Array:
-	return _prepare_base(
-		_base_property,
-		interface_type,
-		func(obj: Object): return obj.get_property_list(),
-		func(p: Dictionary): return not p.name.ends_with(".gd")
-	)
-
-
-## ベースシグナル一覧の準備
-## @param interface_type インタフェーススクリプト型
-## @return 準備済みシグナル配列
-static func _prepare_base_signal(interface_type: GDScript) -> Array:
-	return _prepare_base(
-		_base_signal, interface_type, func(obj: Object): return obj.get_signal_list()
-	)
-
-
 # ------------- [Public Method] -------------
 ## オブジェクトのメソッド・シグナル・プロパティ総合検証
 ## @param target_obj 検証対象オブジェクト
 ## @param interface_type インタフェーススクリプト型
 ## @return 検証結果オブジェクト
-static func validate(res: CHECK_RESULT, target_obj: Object, interface_type: GDScript) -> void:
-	if not _base_interface_instance:
-		_base_interface_instance = InterfaceBase.new()
-
-	res.add_errors(validate_method(target_obj, interface_type))
-	res.add_errors(validate_signal(target_obj, interface_type))
-	res.add_errors(validate_property(target_obj, interface_type))
-
-
-## 配列差分作成
-## @param source_array 対象配列
-## @param subtract_array 差し引き配列
-## @return 差分要素配列
-static func _array_subtract(source_array: Array, subtract_array: Array) -> Array:
-	var ret: Array = []
-	for src in source_array:
-		var found := false
-		for sub in subtract_array:
-			if src.name == sub.name:
-				found = true
-				break
-		if not found:
-			ret.append(src)
-	return ret
+static func validate(res: CHECK_RESULT, target_scr: Script, interface_type: Script) -> void:
+	validate_method(res, target_scr, interface_type)
+	validate_property(res, target_scr, interface_type)
+	validate_signal(res, target_scr, interface_type)
 
 
 ## シグナル定義の検証
 ## @param target_obj 検証対象オブジェクト
 ## @param interface_type インタフェーススクリプト型
 ## @return エラー一覧
-static func validate_signal(target_obj: Object, interface_type: GDScript) -> Array[ERROR.Error]:
-	# オブジェクトのシグナル一覧を辞書化
-	# キーにシグナル名、値にシグナル情報を保持(検索用)
-	var obj_signal_map: Dictionary[String, Dictionary] = {}
-	for signal_info in target_obj.get_signal_list():
-		obj_signal_map[signal_info.name] = signal_info
-
-	var err: Array[ERROR.Error] = []
+static func validate_signal(res: CHECK_RESULT, target_scr: Script, interface_type: Script) -> void:
 	# インタフェース型に基づく期待シグナル一覧を走査
-	for expected_signal in _prepare_base_signal(interface_type):
-		if expected_signal.name not in obj_signal_map:
-			err.append(ERROR.ErrorSignalNotFound.new(expected_signal.name))
+	for expected_signal in CACHE.prepare_base_signal(interface_type):
+		var actual_signal := C.get_signal(target_scr, expected_signal.name)
+		if actual_signal == null:
+			res.add_error(interface_type, ERROR.ErrorSignalNotFound.new(expected_signal.name))
 			continue
 
-		var actual_signal := obj_signal_map[expected_signal.name]
-		# 引数数
+		# 引数の数
 		var expected_arg_count: int = expected_signal.args.size()
 		var actual_arg_count: int = actual_signal.args.size()
 		if expected_arg_count != actual_arg_count:
-			err.append(ERROR.ErrorDifferSignalArgumentNum.new(expected_arg_count, actual_arg_count))
+			res.add_error(
+				interface_type,
+				ERROR.ErrorDifferSignalArgumentNum.new(expected_arg_count, actual_arg_count)
+			)
 		else:
 			for i in range(expected_arg_count):
 				var arg_expected = expected_signal.args[i]
 				var arg_actual = actual_signal.args[i]
 				if arg_expected.name != arg_actual.name:
-					err.append(
+					res.add_error(
+						interface_type,
 						ERROR.ErrorSignalArgPropertyDiffer.new(
 							expected_signal.name,
 							i,
@@ -246,7 +151,8 @@ static func validate_signal(target_obj: Object, interface_type: GDScript) -> Arr
 						)
 					)
 				if arg_expected.type != arg_actual.type:
-					err.append(
+					res.add_error(
+						interface_type,
 						ERROR.ErrorInvalidSignalArgumentType.new(arg_expected.type, arg_actual.type)
 					)
 
@@ -255,59 +161,33 @@ static func validate_signal(target_obj: Object, interface_type: GDScript) -> Arr
 			var expected_ret = expected_signal.return
 			var actual_ret = actual_signal.return
 			if expected_ret.type != actual_ret.type:
-				err.append(
+				res.add_error(
+					interface_type,
 					ERROR.ErrorSignalReturnTypeDiffer.new(
 						expected_signal.name, expected_ret.type, actual_ret.type
 					)
 				)
-	return err
 
 
-## プロパティ定義の検証
-## @param target_obj 検証対象オブジェクト
-## @param interface_type インタフェーススクリプト型
-## @return エラー一覧
-static func validate_property(target_obj: Object, interface_type: GDScript) -> Array[ERROR.Error]:
-	# オブジェクトのプロパティ一覧を辞書化
-	# キーにプロパティ名、値にプロパティ情報を保持(検索用)
-	var obj_property_map: Dictionary[String, Dictionary] = {}
-	for prop_info in target_obj.get_property_list():
-		obj_property_map[prop_info.name] = prop_info
-
-	var err: Array[ERROR.Error] = []
+static func validate_property(
+	res: CHECK_RESULT, target_scr: Script, interface_type: Script
+) -> void:
 	# インタフェース型に基づく期待プロパティ一覧を走査
-	for expected_prop in _prepare_base_property(interface_type):
-		if expected_prop.name not in obj_property_map:
-			err.append(ERROR.ErrorPropertyNotFound.new(expected_prop.name))
+	for expected_prop in CACHE.prepare_base_property(interface_type):
+		var actual_prop := C.get_property(target_scr, expected_prop.name)
+		if actual_prop == null:
+			res.add_error(interface_type, ERROR.ErrorPropertyNotFound.new(expected_prop.name))
 			continue
 
-		var actual_prop := obj_property_map[expected_prop.name]
-		err.append_array(_validate_prop(expected_prop, actual_prop, true))
-
-	return err
+		res.add_errors(interface_type, _validate_prop(expected_prop, actual_prop, true))
 
 
-## メソッド定義の検証
-## @param target_obj 検証対象オブジェクト
-## @param interface_type インタフェーススクリプト型
-## @return エラー一覧
-static func validate_method(target_obj: Object, interface_type: GDScript) -> Array[ERROR.Error]:
-	# オブジェクトのメソッド一覧を辞書化
-	# キーにメソッド名、値にメソッド情報を保持(検索用)
-	var obj_method_map: Dictionary[String, Dictionary] = {}
-	for method_info in target_obj.get_method_list():
-		obj_method_map[method_info.name] = method_info
-
-	var err: Array[ERROR.Error] = []
+static func validate_method(res: CHECK_RESULT, target_scr: Script, interface_type: Script) -> void:
 	# インタフェース型に基づく期待メソッド一覧を走査
-	for expected_method in _prepare_base_method(interface_type):
-		# 期待メソッドが対象オブジェクトに存在しない場合
-		if expected_method.name not in obj_method_map:
-			err.append(ERROR.ErrorMethodNotFound.new(expected_method.name))
+	for expected_method in CACHE.prepare_base_method(interface_type):
+		var actual_method := C.get_method(target_scr, expected_method.name)
+		if actual_method == null:
+			res.add_error(interface_type, ERROR.ErrorMethodNotFound.new(expected_method.name))
 			continue
 
-		# 実際のメソッド情報を取得
-		var actual_method := obj_method_map[expected_method.name]
-		# 詳細比較検証を実施し、差分エラーを追加
-		err.append_array(_validate_method(expected_method, actual_method, true, true))
-	return err
+		res.add_errors(interface_type, _validate_method(expected_method, actual_method, true, true))

@@ -7,6 +7,7 @@ const VALIDATOR = preload("uid://b4t2yue08ojax")
 const CHECK_ALL_ACTION = "check_interface_all"
 const CHECK_RESULT = preload("uid://ck862o06krlja")
 const ERROR = preload("uid://c4n13cyd88clu")
+const C = preload("uid://beur775onkfdv")
 
 
 ## @brief プラグイン有効化処理
@@ -73,15 +74,18 @@ func _check_interface_define_at(dir_str: String) -> void:
 		var scripts := _list_gd_files_recursive(dir, ["addons"])
 		for path in scripts:
 			var res := load(path)
-			if res is GDScript:
-				var scr: GDScript = res
-				var chk_res := _check_interface_define(scr.new())
+			if res is Script:
+				var scr: Script = res
+				var chk_res := _check_interface_define(scr)
 				if chk_res.is_checked:
-					print("Interface Check... {0}".format([path]))
+					print("Check Result {0}".format([path]))
 					if chk_res.has_error():
 						err_count += 1
-						for e in chk_res.errors:
-							push_error(e.as_string())
+						for ifc in chk_res.errors:
+							for e in chk_res.errors[ifc]:
+								push_error(e.as_string())
+					else:
+						print("No Error")
 		if err_count > 0:
 			print("{0} error(s) found.".format([err_count]))
 		else:
@@ -92,18 +96,17 @@ func _check_interface_define_at(dir_str: String) -> void:
 ## @param obj 検証対象オブジェクト
 ## @return エラーメッセージ配列(エラーが無ければ空配列)
 ## @details インターフェース定義が正しく実装されているかを検証する処理
-static func _check_interface_define(obj: Object) -> CHECK_RESULT:
+static func _check_interface_define(scr: Script) -> CHECK_RESULT:
 	var res := CHECK_RESULT.new()
-	if not obj.has_method(Interface.IMPL_LIST_NAME):
+	if C.get_method(scr, Interface.IMPL_LIST_NAME) == null:
 		# Interfaceは何も実装していない
 		return res
 
 	res.set_checked()
-	var if_a := obj.call(Interface.IMPL_LIST_NAME)
-	for interface_gdscr in if_a:
-		if not is_instance_of(interface_gdscr, GDScript):
-			res.add_error(ERROR.InvalidInterface.new(interface_gdscr))
-		VALIDATOR.validate(res, obj, interface_gdscr)
+	var if_a: Array[Script] = scr.call(Interface.IMPL_LIST_NAME)
+	for interface_scr in if_a:
+		print("Checking [{0}]".format([interface_scr.get_global_name()]))
+		VALIDATOR.validate(res, scr, interface_scr)
 	return res
 
 

@@ -44,21 +44,6 @@
 		return "Not found: '%s'" % target_name
 
 
-# ---------- [Interface] ----------
-class InvalidInterface:
-	extends Error
-
-	var name: String
-
-	func _init(ifc: Variant) -> void:
-		var res := ifc as Resource
-		if res:
-			name = res.resource_name
-
-	func as_string() -> String:
-		return "Interface implementation must be a GDScript, but found invalid type. (%s)" % name
-
-
 # ---------- [Argument count differ] ----------
 class ErrorDifferMethodArgumentNum:
 	extends ErrorDifferArgumentNum

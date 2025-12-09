@@ -5,14 +5,14 @@ const OK_IF = preload("uid://cwbmudlob40n")
 var impl_obj := CharacterBody2D.new()
 
 
-static func implements_list() -> Array[GDScript]:
+static func implements_list() -> Array[Script]:
 	return [
 		OK_CHILD_IF,
 		OK_IF,
 	]
 
 
-func get_implementer(t_if: GDScript) -> Object:
+func get_implementer(t_if: Script) -> Object:
 	match t_if:
 		OK_CHILD_IF:
 			return impl_obj
