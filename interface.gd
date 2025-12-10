@@ -58,8 +58,8 @@ static func implemented(obj: Object, t_if: Script, detailed: bool = false) -> bo
 
 	# 詳細判定
 	var res := CHECK_RESULT.new()
-	VALIDATOR.validate(res, obj, t_if)
-	return res.has_error()
+	VALIDATOR.validate(res, obj.get_script(), t_if)
+	return not res.has_error()
 
 
 ## @brief 指定されたオブジェクトをインターフェースとしてラップする関数
