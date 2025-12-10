@@ -73,3 +73,26 @@ static func as_interface(obj: Object, t_if: Script) -> InterfaceBase:
 		ret._impl = obj
 		return ret
 	return null
+
+
+## @brief インターフェースを介して処理を実行する関数
+## @param obj 対象オブジェクト
+## @param t_if インタフェーススクリプト
+## @param proc 実行するCallable
+## @param warn_if_invalid インタフェース未実装時に警告を出すかどうか
+## @return なし
+static func proc_interface(
+	obj: Object, t_if: Script, proc: Callable, warn_if_invalid: bool = false
+) -> void:
+	var ifc = as_interface(obj, t_if)
+	if ifc != null:
+		proc.call(ifc)
+	else:
+		if warn_if_invalid:
+			var if_name := t_if.resource_path if t_if.resource_path != "" else str(t_if)
+			push_warning(
+				(
+					"proc_interface: target does not implement interface, skipping call: object=%s, interface=%s"
+					% [str(obj), if_name]
+				)
+			)
