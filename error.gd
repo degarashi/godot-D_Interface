@@ -33,7 +33,7 @@
 	## 型IDを人可読文字列へ（必要なら差し替え）
 	func _type_id_to_string(id: int) -> String:
 		# プロジェクト固有の型テーブルがあれば置き換える
-		return "TypeID(%d)" % id
+		return "Type({0})".format([type_string(id)])
 
 
 @abstract class ErrorNotFound:
