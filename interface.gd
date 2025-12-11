@@ -27,6 +27,8 @@ const GET_IMPLEMENTER_NAME = &"get_implementer"
 ## @param t_if インタフェーススクリプト
 ## @return 実装委譲先オブジェクト
 static func _get_implementer(obj: Object, t_if: Script) -> Object:
+	assert(obj != null, "_get_implementer: 'obj' is null — pass a valid Object")
+	assert(t_if != null, "_get_implementer: 't_if' is null — pass a valid Script")
 	if not obj.has_method(GET_IMPLEMENTER_NAME):
 		return obj
 	# 指定インタフェースに対する実装オブジェクトの取得
@@ -43,6 +45,8 @@ static func _get_implementer(obj: Object, t_if: Script) -> Object:
 ## @param detailed 詳細判定を行うかどうかのフラグ
 ## @return 実装判定結果
 static func implemented(obj: Object, t_if: Script, detailed: bool = false) -> bool:
+	assert(obj != null, "implemented: 'obj' is null — pass a valid Object")
+	assert(t_if != null, "implemented: 't_if' is null — pass a valid Script")
 	obj = _get_implementer(obj, t_if)
 	if not obj.has_method(IMPL_LIST_NAME):
 		return false
@@ -67,9 +71,13 @@ static func implemented(obj: Object, t_if: Script, detailed: bool = false) -> bo
 ## @param t_if インタフェーススクリプト
 ## @return インターフェースラッパーオブジェクト
 static func as_interface(obj: Object, t_if: Script) -> InterfaceBase:
+	assert(obj != null, "as_interface: 'obj' is null — pass a valid Object")
+	assert(t_if != null, "as_interface: 't_if' is null — pass a valid Script")
+
 	obj = _get_implementer(obj, t_if)
 	if implemented(obj, t_if):
 		var ret = t_if.new()
+		assert(ret is InterfaceBase, "as_interface: interface instance must extend InterfaceBase")
 		ret._impl = obj
 		return ret
 	return null
@@ -84,6 +92,8 @@ static func as_interface(obj: Object, t_if: Script) -> InterfaceBase:
 static func proc_interface(
 	obj: Object, t_if: Script, proc: Callable, warn_if_invalid: bool = false
 ) -> void:
+	assert(obj != null, "proc_interface: 'obj' is null — pass a valid Object")
+	assert(t_if != null, "proc_interface: 't_if' is null — pass a valid Script")
 	var ifc = as_interface(obj, t_if)
 	if ifc != null:
 		proc.call(ifc)
