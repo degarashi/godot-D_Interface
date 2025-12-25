@@ -94,7 +94,7 @@ static func proc_interface(
 ) -> void:
 	assert(obj != null, "proc_interface: 'obj' is null — pass a valid Object")
 	assert(t_if != null, "proc_interface: 't_if' is null — pass a valid Script")
-	var ifc = as_interface(obj, t_if)
+	var ifc := as_interface(obj, t_if)
 	if ifc != null:
 		proc.call(ifc)
 	else:
