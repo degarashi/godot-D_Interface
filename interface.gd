@@ -33,8 +33,12 @@ static func _get_implementer(obj: Object, t_if: Script) -> Object:
 		return obj
 	# 指定インタフェースに対する実装オブジェクトの取得
 	var implementer = obj.get_implementer(t_if)
-	if implementer == obj or implementer is not Object:
+	if implementer == obj:
 		return obj
+	assert(
+		is_instance_valid(implementer),
+		"_get_implementer: 'implementer' is not a valid instance — check get_implementer implementation"
+	)
 	# 連鎖的な委譲の解決
 	return _get_implementer(implementer, t_if)
 
