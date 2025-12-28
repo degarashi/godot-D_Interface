@@ -80,9 +80,9 @@ static func as_interface(obj: Object, t_if: Script) -> InterfaceBase:
 
 	obj = _get_implementer(obj, t_if)
 	if implemented(obj, t_if):
-		var ret = t_if.new()
+		var ret: InterfaceBase = t_if.new()
 		assert(ret is InterfaceBase, "as_interface: interface instance must extend InterfaceBase")
-		ret._impl = obj
+		ret.setup_interface(obj)
 		return ret
 	return null
 
