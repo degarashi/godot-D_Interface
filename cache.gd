@@ -1,17 +1,6 @@
 extends Object
 
-
-class InterfaceBaseInst:
-	@warning_ignore("unused_private_class_variable")
-	static var _base_interface_instance: InterfaceBase
-
-	static func clear_cache() -> void:
-		_base_interface_instance = null
-
-	static func _get_base_instance() -> InterfaceBase:
-		if not _base_interface_instance:
-			_base_interface_instance = InterfaceBase.new()
-		return _base_interface_instance
+const I_BASE: Script = preload("uid://dk4jd4pqds5q4")
 
 
 class ScriptEnt:
@@ -48,37 +37,35 @@ class ScriptEnt:
 	## @param checker フィルタリング用チェックコールバック
 	## @return キャッシュ配列
 	static func _prepare_base(
-		obj: Object,
+		scr: Script,
 		getter_func: Callable,
 		filter_func: Callable = func(_a: Dictionary): return true
 	) -> Array:
-		var base_inst := InterfaceBaseInst._get_base_instance()
+		I_BASE.get_script_method_list()
 		var ar := _array_subtract(
 			# 対象ObjectからGetした物
-			getter_func.call(obj),
+			getter_func.call(scr),
 			# InterfaceBaseからGetした物
-			getter_func.call(base_inst)
+			getter_func.call(I_BASE)
 		)
 		# フィルタリングした結果を返す
 		return ar.filter(filter_func)
 
 	func _update(scr: Script) -> void:
-		var tmp_obj: Object = scr.new()
-		assert(tmp_obj != null, "interface_type.new() returned null")
 		method_a = _prepare_base(
-			tmp_obj,
-			func(obj: Object): return obj.get_method_list(),
+			scr,
+			func(scr: Script): return scr.get_script_method_list(),
 			func(m: Dictionary):
 				return not (m.name.begins_with("@") or (m.flags & METHOD_FLAG_STATIC)),
 		)
 		property_a = _prepare_base(
-			tmp_obj,
-			func(obj: Object): return obj.get_property_list(),
+			scr,
+			func(scr: Script): return scr.get_script_property_list(),
 			func(p: Dictionary): return not p.name.ends_with(".gd"),
 		)
 		signal_a = _prepare_base(
-			tmp_obj,
-			func(obj: Object): return obj.get_signal_list(),
+			scr,
+			func(scr: Script): return scr.get_script_signal_list(),
 		)
 
 	func check_update(scr: Script) -> void:
@@ -94,7 +81,6 @@ static var _cache: Dictionary[Script, ScriptEnt] = {}
 # ------------- [Public Static Method] -------------
 static func clear_cache() -> void:
 	_cache.clear()
-	InterfaceBaseInst.clear_cache()
 
 
 static func prepare_cache(interface_type: Script) -> ScriptEnt:
