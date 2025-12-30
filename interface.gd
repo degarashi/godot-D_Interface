@@ -43,6 +43,14 @@ static func _get_implementer(obj: Object, t_if: Script) -> Object:
 	return _get_implementer(implementer, t_if)
 
 
+static func is_base_of(base_scr: Script, scr: Script) -> bool:
+	if scr == null:
+		return false
+	if scr == base_scr:
+		return true
+	return is_base_of(base_scr, scr.get_base_script())
+
+
 ## @brief 指定されたオブジェクトが与えられたインターフェースを実装しているか判定する関数
 ## @param obj 対象オブジェクト
 ## @param t_if インタフェーススクリプト
@@ -52,6 +60,7 @@ static func implemented(obj: Object, t_if: Script, detailed: bool = false) -> bo
 	assert(obj != null, "implemented: 'obj' is null — pass a valid Object")
 	assert(t_if != null, "implemented: 't_if' is null — pass a valid Script")
 	obj = _get_implementer(obj, t_if)
+	# インタフェース実装リストを参照
 	if not obj.has_method(IMPL_LIST_NAME):
 		return false
 	var impls = obj.call(IMPL_LIST_NAME)
@@ -59,7 +68,11 @@ static func implemented(obj: Object, t_if: Script, detailed: bool = false) -> bo
 		impls is Array[Script],
 		"The property '%s' must be an Array[Script], but got %s" % [IMPL_LIST_NAME, typeof(impls)]
 	)
-	if t_if not in impls:
+	var found: Script = null
+	for impl in impls:
+		if is_base_of(t_if, impl):
+			found = impl
+	if not found:
 		return false
 	if not detailed:
 		return true
