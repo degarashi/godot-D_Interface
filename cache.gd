@@ -48,16 +48,14 @@ class ScriptEnt:
 	## @param checker フィルタリング用チェックコールバック
 	## @return キャッシュ配列
 	static func _prepare_base(
-		interface_type: Script,
+		obj: Object,
 		getter_func: Callable,
 		filter_func: Callable = func(_a: Dictionary): return true
 	) -> Array:
-		var tmp_obj: Object = interface_type.new()
-		assert(tmp_obj != null, "interface_type.new() returned null")
 		var base_inst := InterfaceBaseInst._get_base_instance()
 		var ar := _array_subtract(
 			# 対象ObjectからGetした物
-			getter_func.call(tmp_obj),
+			getter_func.call(obj),
 			# InterfaceBaseからGetした物
 			getter_func.call(base_inst)
 		)
@@ -65,18 +63,21 @@ class ScriptEnt:
 		return ar.filter(filter_func)
 
 	func _update(scr: Script) -> void:
+		var tmp_obj: Object = scr.new()
+		assert(tmp_obj != null, "interface_type.new() returned null")
 		method_a = _prepare_base(
-			scr,
+			tmp_obj,
 			func(obj: Object): return obj.get_method_list(),
-			func(m: Dictionary): return not m.name.begins_with("@"),
+			func(m: Dictionary):
+				return not (m.name.begins_with("@") or (m.flags & METHOD_FLAG_STATIC)),
 		)
 		property_a = _prepare_base(
-			scr,
+			tmp_obj,
 			func(obj: Object): return obj.get_property_list(),
 			func(p: Dictionary): return not p.name.ends_with(".gd"),
 		)
 		signal_a = _prepare_base(
-			scr,
+			tmp_obj,
 			func(obj: Object): return obj.get_signal_list(),
 		)
 
