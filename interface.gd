@@ -83,20 +83,40 @@ static func implemented(obj: Object, t_if: Script, detailed: bool = false) -> bo
 	return not res.has_error()
 
 
+static func is_ancestor_of(scr_base: Script, scr: Script) -> bool:
+	if scr == null:
+		return false
+	if scr == scr_base:
+		return true
+	return is_ancestor_of(scr_base, scr.get_base_script())
+
+
 ## @brief 指定されたオブジェクトをインターフェースとしてラップする関数
 ## @param obj 対象オブジェクト
 ## @param t_if インタフェーススクリプト
 ## @return インターフェースラッパーオブジェクト
-static func as_interface(obj: Object, t_if: Script) -> InterfaceBase:
-	assert(obj != null, "as_interface: 'obj' is null — pass a valid Object")
+static func as_interface(source: Object, t_if: Script) -> InterfaceBase:
+	assert(source != null, "as_interface: 'obj' is null — pass a valid Object")
 	assert(t_if != null, "as_interface: 't_if' is null — pass a valid Script")
 
-	obj = _get_implementer(obj, t_if)
-	if implemented(obj, t_if):
+	var valid_source: Object = null
+	if is_instance_of(source, InterfaceBase):
+		# source is Interface
+		if is_ancestor_of(t_if, source.get_script()):
+			var i_base: InterfaceBase = source
+			valid_source = i_base._impl
+	else:
+		# source is Object instance
+		source = _get_implementer(source, t_if)
+		if implemented(source, t_if):
+			valid_source = source
+
+	if valid_source:
 		var ret: InterfaceBase = t_if.new()
 		assert(ret is InterfaceBase, "as_interface: interface instance must extend InterfaceBase")
-		ret.setup_interface(obj)
+		ret.setup_interface(valid_source)
 		return ret
+
 	return null
 
 
