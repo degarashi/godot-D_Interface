@@ -57,7 +57,8 @@ static func is_base_of(base_scr: Script, scr: Script) -> bool:
 ## @param detailed 詳細判定を行うかどうかのフラグ
 ## @return 実装判定結果
 static func implemented(obj: Object, t_if: Script, detailed: bool = false) -> bool:
-	assert(obj != null, "implemented: 'obj' is null — pass a valid Object")
+	if not obj:
+		return false
 	assert(t_if != null, "implemented: 't_if' is null — pass a valid Script")
 	obj = _get_implementer(obj, t_if)
 	# インタフェース実装リストを参照
