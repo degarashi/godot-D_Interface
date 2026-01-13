@@ -15,3 +15,7 @@ func setup_interface(impl: Object) -> void:
 ## call from InterfaceBase.setup_interface()
 func _on_setup_interface() -> void:
 	pass
+
+
+func is_valid() -> bool:
+	return _impl != null and is_instance_valid(_impl)
