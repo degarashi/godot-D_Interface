@@ -104,11 +104,10 @@ static func as_interface(source: Object, t_if: Script) -> InterfaceBase:
 	var valid_source: Object = null
 	if is_instance_of(source, InterfaceBase):
 		# source is Interface
+		var i_base: InterfaceBase = source
 		if is_ancestor_of(t_if, source.get_script()):
-			var i_base: InterfaceBase = source
 			valid_source = i_base._impl
 
-		var i_base: InterfaceBase = source
 		valid_source = as_interface(i_base._impl, t_if)
 	else:
 		# source is Object instance
