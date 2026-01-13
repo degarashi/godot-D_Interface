@@ -96,8 +96,9 @@ static func is_ancestor_of(scr_base: Script, scr: Script) -> bool:
 ## @param t_if インタフェーススクリプト
 ## @return インターフェースラッパーオブジェクト
 static func as_interface(source: Object, t_if: Script) -> InterfaceBase:
-	assert(source != null, "as_interface: 'obj' is null — pass a valid Object")
 	assert(t_if != null, "as_interface: 't_if' is null — pass a valid Script")
+	if not source:
+		return null
 
 	var valid_source: Object = null
 	if is_instance_of(source, InterfaceBase):
