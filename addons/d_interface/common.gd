@@ -1,6 +1,13 @@
-@abstract class Getter:
-	@abstract func get_it(scr: Script) -> Array
-	@abstract func class_get(name: StringName) -> Array
+extends Object
+
+
+# ------------- [Helper Classes] -------------
+class Getter:
+	func get_it(_scr: Script) -> Array:
+		return []
+
+	func class_get(_name: StringName) -> Array:
+		return []
 
 
 class MethodGetter:
@@ -33,29 +40,50 @@ class SignalGetter:
 		return ClassDB.class_get_signal_list(name)
 
 
-static func _get_it(scr: Script, getter: Getter, name: String) -> Variant:
-	for m in getter.get_it(scr):
+# ------------- [Private Static Method] -------------
+static func _get_from_script(scr: Script, getter: Getter, name: String) -> Variant:
+	for m: Dictionary in getter.get_it(scr):
 		if m.name == name:
 			return m
-	var base := scr.get_base_script()
-	if base != null:
-		return _get_it(base, getter, name)
 
-	var base_name := scr.get_instance_base_type()
-	if base_name != "":
-		for m in getter.class_get(base_name):
-			if m.name == name:
-				return m
+	var base: Script = scr.get_base_script()
+	if base:
+		return _get_from_script(base, getter, name)
 	return null
 
 
-static func get_method(scr: Script, name: String) -> Variant:
-	return _get_it(scr, MethodGetter.new(), name)
+static func _get_from_class(cls_name: StringName, getter: Getter, name: String) -> Variant:
+	for m: Dictionary in getter.class_get(cls_name):
+		if m.name == name:
+			return m
+
+	var parent: StringName = ClassDB.get_parent_class(cls_name)
+	if parent != &"":
+		return _get_from_class(parent, getter, name)
+	return null
 
 
-static func get_property(scr: Script, name: String) -> Variant:
-	return _get_it(scr, PropertyGetter.new(), name)
+# ------------- [Public Static Method] -------------
+## インスタンスから指定された要素（メソッド/プロパティ/シグナル）を検索する
+static func get_it(target: Object, getter: Getter, name: String) -> Variant:
+	if not target:
+		return null
+
+	var tgt: Object = target.get_script() if target is not Script else target
+	var res := _get_from_script(tgt, getter, name)
+	if res:
+		return res
+
+	return _get_from_class(target.get_class(), getter, name)
 
 
-static func get_signal(scr: Script, name: String) -> Variant:
-	return _get_it(scr, SignalGetter.new(), name)
+static func get_method(target: Object, name: String) -> Variant:
+	return get_it(target, MethodGetter.new(), name)
+
+
+static func get_property(target: Object, name: String) -> Variant:
+	return get_it(target, PropertyGetter.new(), name)
+
+
+static func get_signal(target: Object, name: String) -> Variant:
+	return get_it(target, SignalGetter.new(), name)

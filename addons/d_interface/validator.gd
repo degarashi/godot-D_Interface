@@ -105,23 +105,32 @@ static func _validate_method(
 
 # ------------- [Public Method] -------------
 ## オブジェクトのメソッド・シグナル・プロパティ総合検証
-## @param target_obj 検証対象オブジェクト
+## @param res 検証結果を格納するオブジェクト
+## @param target_obj 検証対象のインスタンス
 ## @param interface_type インタフェーススクリプト型
-## @return 検証結果オブジェクト
-static func validate(res: CHECK_RESULT, target_scr: Script, interface_type: Script) -> void:
-	validate_method(res, target_scr, interface_type)
-	validate_property(res, target_scr, interface_type)
-	validate_signal(res, target_scr, interface_type)
+static func validate(res: CHECK_RESULT, target_obj: Object, interface_type: Script) -> void:
+	# 実装を保持している「真の対象」を取得する
+	var implementer: Object = target_obj
+	if target_obj.has_method("get_implementer"):
+		var delegated = target_obj.get_implementer(interface_type)
+		if delegated:
+			implementer = delegated
+
+	# スクリプトを持たない組み込みクラス（CharacterBody2D等）への対応のため
+	# スクリプトResourceではなくObjectインスタンスを直接渡して検証を行う
+	validate_method(res, implementer, interface_type)
+	validate_property(res, implementer, interface_type)
+	validate_signal(res, implementer, interface_type)
 
 
-## シグナル定義の検証
-## @param target_obj 検証対象オブジェクト
-## @param interface_type インタフェーススクリプト型
-## @return エラー一覧
-static func validate_signal(res: CHECK_RESULT, target_scr: Script, interface_type: Script) -> void:
+## オブジェクトのシグナル定義がインタフェースと一致するか検証
+## @param res 検証結果を格納するオブジェクト
+## @param target 検証対象のインスタンス
+## @param interface_type 期待する構造を定義したインタフェーススクリプト
+static func validate_signal(res: CHECK_RESULT, target: Object, interface_type: Script) -> void:
 	# インタフェース型に基づく期待シグナル一覧を走査
 	for expected_signal in CACHE.prepare_cache(interface_type).signal_a:
-		var actual_signal := C.get_signal(target_scr, expected_signal.name)
+		var actual_signal := C.get_signal(target, expected_signal.name)
 		if actual_signal == null:
 			res.add_error(interface_type, ERROR.ErrorSignalNotFound.new(expected_signal.name))
 			continue
@@ -169,12 +178,11 @@ static func validate_signal(res: CHECK_RESULT, target_scr: Script, interface_typ
 				)
 
 
-static func validate_property(
-	res: CHECK_RESULT, target_scr: Script, interface_type: Script
-) -> void:
+## オブジェクトのプロパティ定義がインタフェースと一致するか検証
+static func validate_property(res: CHECK_RESULT, target: Object, interface_type: Script) -> void:
 	# インタフェース型に基づく期待プロパティ一覧を走査
 	for expected_prop in CACHE.prepare_cache(interface_type).property_a:
-		var actual_prop := C.get_property(target_scr, expected_prop.name)
+		var actual_prop := C.get_property(target, expected_prop.name)
 		if actual_prop == null:
 			res.add_error(interface_type, ERROR.ErrorPropertyNotFound.new(expected_prop.name))
 			continue
@@ -182,10 +190,11 @@ static func validate_property(
 		res.add_errors(interface_type, _validate_prop(expected_prop, actual_prop, true))
 
 
-static func validate_method(res: CHECK_RESULT, target_scr: Script, interface_type: Script) -> void:
+## オブジェクトのメソッド定義がインタフェースと一致するか検証
+static func validate_method(res: CHECK_RESULT, target: Object, interface_type: Script) -> void:
 	# インタフェース型に基づく期待メソッド一覧を走査
 	for expected_method in CACHE.prepare_cache(interface_type).method_a:
-		var actual_method := C.get_method(target_scr, expected_method.name)
+		var actual_method := C.get_method(target, expected_method.name)
 		if actual_method == null:
 			res.add_error(interface_type, ERROR.ErrorMethodNotFound.new(expected_method.name))
 			continue

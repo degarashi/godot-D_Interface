@@ -1,6 +1,7 @@
 @tool
 extends EditorPlugin
 
+# ------------- [Constants] -------------
 const MENU_TEXT = "Check Interface Defines"
 const VALIDATOR = preload("uid://b4t2yue08ojax")
 # ショートカットアクション名
@@ -42,6 +43,7 @@ func _input(_event: InputEvent) -> void:
 		get_tree().root.set_input_as_handled()
 
 
+# ------------- [Private Method] -------------
 func _register_shortcut() -> void:
 	# 入力マップにアクションを追加（プロジェクト設定ではなく一時的に利用）
 	if not InputMap.has_action(CHECK_ALL_ACTION):
@@ -70,8 +72,9 @@ func _check_interface_define_all() -> void:
 func _check_interface_define_at(dir_str: String) -> void:
 	var dir := DirAccess.open(dir_str)
 	if dir:
-		var err_count := 0
+		var total_err_count: int = 0
 		var scripts := _list_gd_files_recursive(dir, ["addons"])
+
 		for path in scripts:
 			var res := load(path)
 			if res is Script:
@@ -80,33 +83,65 @@ func _check_interface_define_at(dir_str: String) -> void:
 				if chk_res.is_checked:
 					print("{0}".format([path]))
 					if chk_res.has_error():
-						err_count += 1
-						for ifc in chk_res.errors:
-							for e in chk_res.errors[ifc]:
+						total_err_count += 1
+						for ifc: Script in chk_res.errors:
+							var err_list := chk_res.get_errors(ifc)
+							for e: Variant in err_list:
 								push_error(e.as_string())
 					else:
 						print("\tNo Error")
-		if err_count > 0:
-			print("{0} error(s) found.".format([err_count]))
+
+		if total_err_count > 0:
+			print("{0} script(s) with errors found.".format([total_err_count]))
 		else:
 			print("----------------- All OK -----------------")
 
 
 ## @brief インターフェース定義検証処理
-## @param obj 検証対象オブジェクト
-## @return エラーメッセージ配列(エラーが無ければ空配列)
-## @details インターフェース定義が正しく実装されているかを検証する処理
+## @param scr 検証対象のスクリプト
+## @return 検証結果オブジェクト
 static func _check_interface_define(scr: Script) -> CHECK_RESULT:
 	var res := CHECK_RESULT.new()
+
+	# インスタンス化可能か、およびインターフェースリストを保持しているかチェック
+	if not scr.can_instantiate():
+		return res
 	if C.get_method(scr, Interface.IMPL_LIST_NAME) == null:
-		# Interfaceは何も実装していない
 		return res
 
+	# _init(コンストラクタ) の引数チェック
+	# 必須引数（デフォルト値のない引数）がある場合は、new() できないためスキップする
+	var init_info: Variant = C.get_method(scr, "_init")
+	if init_info:
+		var arg_count: int = init_info.args.size()
+		var default_arg_count: int = init_info.default_args.size()
+		var required_arg_count: int = arg_count - default_arg_count
+
+		if required_arg_count > 0:
+			# 必須引数があるスクリプトは動的検証から除外（ログに出すとノイズになるためサイレントに復帰）
+			return res
+
+	# インスタンスを生成して検証を行う
 	res.set_checked()
-	var if_a: Array[Script] = scr.call(Interface.IMPL_LIST_NAME)
-	for interface_scr in if_a:
-		print("Checking [{0}]".format([interface_scr.get_global_name()]))
-		VALIDATOR.validate(res, scr, interface_scr)
+	var obj: Object = scr.new()
+	if not obj:
+		return res
+
+	var if_a: Array = scr.call(Interface.IMPL_LIST_NAME)
+	for interface_scr: Variant in if_a:
+		if interface_scr is Script:
+			# グローバル名がない場合はリソースパスを表示
+			var if_name: String = interface_scr.get_global_name()
+			if if_name == "":
+				if_name = interface_scr.resource_path.get_file()
+
+			print("Checking [{0}]".format([if_name]))
+			VALIDATOR.validate(res, obj, interface_scr)
+
+	# インスタンスの解放
+	if not obj is RefCounted:
+		obj.free()
+
 	return res
 
 
