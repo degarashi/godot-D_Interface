@@ -42,3 +42,14 @@ func add_error(ifc: Script, e: ERROR.Error) -> void:
 func add_errors(ifc: Script, e: Array[ERROR.Error]) -> void:
 	if not e.is_empty():
 		_mark_checked_with_error(ifc, e)
+
+
+## 指定したインターフェースに関連するエラー配列を取得
+func get_errors(ifc: Script) -> Array[ERROR.Error]:
+	if not errors.has(ifc):
+		return []
+
+	var ret: Array[ERROR.Error]
+	for e in errors[ifc]:
+		ret.append(e)
+	return ret
