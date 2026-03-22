@@ -103,29 +103,39 @@ func _check_interface_define_at(dir_str: String) -> void:
 static func _check_interface_define(scr: Script) -> CHECK_RESULT:
 	var res := CHECK_RESULT.new()
 
-	# インスタンス化可能か、およびインターフェースリストを保持しているかチェック
-	if not scr.can_instantiate():
+	if scr == null:
 		return res
+
+	# エンジン由来クラス継承したスクリプトなどは can_instantiate()がfalse になる場合があるため
+	# 直接new()が可能か、あるいは特定のベースクラスを持っているかを確認する
+	var can_create := scr.can_instantiate()
+
+	# NodeやResourceを継承した通常のスクリプトであれば、
+	# class_nameの有無に関わらず本来は new() 可能。
+	# 失敗する場合は抽象クラスか、ツールモードでの初期化エラー。
+	if not can_create:
+		# 補足: InterfaceBaseを継承しているリソース型スクリプトの場合のフォールバック
+		if not scr.get_instance_base_type() == "":
+			can_create = true
+
+	if not can_create:
+		return res
+
 	if C.get_method(scr, Interface.IMPL_LIST_NAME) == null:
 		return res
 
-	# _init(コンストラクタ) の引数チェック
-	# 必須引数（デフォルト値のない引数）がある場合は、new() できないためスキップする
-	var init_info: Variant = C.get_method(scr, "_init")
+	var init_info := C.get_method(scr, "_init")
 	if init_info:
-		var arg_count: int = init_info.args.size()
-		var default_arg_count: int = init_info.default_args.size()
-		var required_arg_count: int = arg_count - default_arg_count
-
-		if required_arg_count > 0:
-			# 必須引数があるスクリプトは動的検証から除外（ログに出すとノイズになるためサイレントに復帰）
+		var required_args: int = init_info.args.size() - init_info.default_args.size()
+		if required_args > 0:
 			return res
 
-	# インスタンスを生成して検証を行う
-	res.set_checked()
+	# 実際に生成を試みる
 	var obj: Object = scr.new()
 	if not obj:
 		return res
+
+	res.set_checked()
 
 	var if_a: Array = scr.call(Interface.IMPL_LIST_NAME)
 	for interface_scr: Variant in if_a:
