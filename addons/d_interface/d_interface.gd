@@ -101,9 +101,11 @@ func _check_interface_define_at(dir_str: String) -> void:
 ## @param scr 検証対象のスクリプト
 ## @return 検証結果オブジェクト
 static func _check_interface_define(scr: Script) -> CHECK_RESULT:
+	print("Checking Script: {0}".format([scr.resource_path.get_file()]))
 	var res := CHECK_RESULT.new()
 
 	if scr == null:
+		print("Error: Script is null.")
 		return res
 
 	# エンジン由来クラス継承したスクリプトなどは can_instantiate()がfalse になる場合があるため
@@ -119,20 +121,24 @@ static func _check_interface_define(scr: Script) -> CHECK_RESULT:
 			can_create = true
 
 	if not can_create:
+		print("Skip: Script cannot be instantiated. (Path: %s)" % scr.resource_path)
 		return res
 
 	if C.get_method(scr, Interface.IMPL_LIST_NAME) == null:
+		print("Skip: Interface implementation list method not found.")
 		return res
 
 	var init_info := C.get_method(scr, "_init")
 	if init_info:
 		var required_args: int = init_info.args.size() - init_info.default_args.size()
 		if required_args > 0:
+			print("Skip: _init requires %d arguments." % required_args)
 			return res
 
 	# 実際に生成を試みる
 	var obj: Object = scr.new()
 	if not obj:
+		print("Error: Failed to create instance via new().")
 		return res
 
 	res.set_checked()
