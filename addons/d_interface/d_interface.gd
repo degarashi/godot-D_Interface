@@ -84,9 +84,9 @@ func _check_interface_define_at(dir_str: String) -> void:
 					print("{0}".format([path]))
 					if chk_res.has_error():
 						total_err_count += 1
-						for ifc: Script in chk_res.errors:
+						for ifc in chk_res.errors:
 							var err_list := chk_res.get_errors(ifc)
-							for e: Variant in err_list:
+							for e in err_list:
 								push_error(e.as_string())
 					else:
 						print("\tNo Error")
@@ -138,7 +138,7 @@ static func _check_interface_define(scr: Script) -> CHECK_RESULT:
 	res.set_checked()
 
 	var if_a: Array = scr.call(Interface.IMPL_LIST_NAME)
-	for interface_scr: Variant in if_a:
+	for interface_scr in if_a:
 		if interface_scr is Script:
 			# グローバル名がない場合はリソースパスを表示
 			var if_name: String = interface_scr.get_global_name()
