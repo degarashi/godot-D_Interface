@@ -57,14 +57,29 @@ static func _extract_parent_info(text: String) -> Dictionary:
 	for raw_line in text.split("\n"):
 		var line := raw_line.strip_edges()
 		if line.begins_with("extends"):
-			# extends "res://path/to/i_base.ifc" からパスを抜き出す
 			var parts = line.split('"')
 			if parts.size() >= 2:
-				var path = parts[1]
-				info.path = path
-				info.class_name = _format_class_name(path.get_file().get_basename())
+				var raw_path = parts[1]
+				info.path = raw_path
+
+				# --- 物理ファイルの存在チェック ---
+				if raw_path.begins_with("res://"):
+					if not FileAccess.file_exists(raw_path):
+						push_error("[Interface] Parent file not found at: %s" % raw_path)
+						# エラーは出すが、名前推測だけは続けて「型」としての体裁は保つ
+
+				var file_name = raw_path.get_file().get_basename()
+				info.class_name = _format_class_name(file_name)
 			break
 	return info
+
+
+## @brief global_class (project.godotに登録されたもの) に存在するか確認
+static func _is_global_script_exists(cls: String) -> bool:
+	for c in ProjectSettings.get_global_class_list():
+		if c["class"] == cls:
+			return true
+	return false
 
 
 ## @brief その .ifc ファイル自身の定義のみを解析する
