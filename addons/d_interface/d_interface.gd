@@ -29,6 +29,42 @@ func _enter_tree() -> void:
 	add_tool_menu_item(MENU_TEXT, Callable(self, "_check_interface_define_all"))
 	_register_shortcut()
 
+	# ファイルシステムの変更（保存や削除、移動）を監視
+	var efs := get_editor_interface().get_resource_filesystem()
+	efs.resources_reload.connect(_on_resources_reload)
+
+
+## @brief リソースが再読み込みされた際のコールバック
+func _on_resources_reload(resources: PackedStringArray) -> void:
+	# リロードされたリソースの中にスクリプトがあれば検証
+	for path in resources:
+		if not path.ends_with(".gd"):
+			continue
+
+		# addonsフォルダ内は無視
+		if path.begins_with("res://addons/"):
+			continue
+
+		var res := load(path)
+		if not res is Script:
+			continue
+
+		var scr: Script = res
+
+		# 検品実行
+		var chk_res := _check_interface_define(scr)
+
+		if chk_res.is_checked:
+			if chk_res.has_error():
+				# エラーがある場合は目立つように
+				printerr("[InterfaceCheck] ❌ Error in: ", path.get_file())
+				for ifc in chk_res.errors:
+					for e in chk_res.get_errors(ifc):
+						push_error(e.as_string())
+			else:
+				# 成功時は控えめに通知
+				print("[InterfaceCheck] ✅ OK: ", path.get_file())
+
 
 ## @brief ツリー退出処理
 ## @details エディタツリーから出た際にメニュー項目を削除する処理
