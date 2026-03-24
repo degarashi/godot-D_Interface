@@ -21,8 +21,8 @@ static func _validate_prop(
 	if not skip_name_check and expected_prop.name != actual_prop.name:
 		ret.append(ERROR.ErrorPropertyNameDiffer.new(expected_prop.name, actual_prop.name))
 
-	# 型チェック
-	if expected_prop.type != actual_prop.type:
+	# 型チェック：期待側が Variant(0) でなければ厳密に比較
+	if expected_prop.type != TYPE_NIL and expected_prop.type != actual_prop.type:
 		ret.append(
 			ERROR.ErrorPropertyTypeDiffer.new(
 				expected_prop.name, expected_prop.type, actual_prop.type
@@ -50,7 +50,8 @@ static func _validate_method(
 		for i in range(expected_arg_count):
 			var arg_expected = expected_method.args[i]
 			var arg_actual = actual_method.args[i]
-			# 名前差分（参考情報としてメッセージ化）
+
+			# 引数名の比較 (オプション)
 			if not skip_arg_name:
 				if arg_expected.name != arg_actual.name:
 					err.append(
@@ -63,8 +64,9 @@ static func _validate_method(
 							)
 						)
 					)
-			# 型差分は型不一致エラー
-			if arg_expected.type != arg_actual.type:
+
+			# 引数型の比較: 期待側が Variant(TYPE_NIL) でない場合のみ厳密にチェック
+			if arg_expected.type != TYPE_NIL and arg_expected.type != arg_actual.type:
 				err.append(
 					ERROR.ErrorInvalidMethodArgumentType.new(arg_expected.type, arg_actual.type)
 				)
@@ -91,10 +93,12 @@ static func _validate_method(
 						)
 					)
 
-	# 戻り値の型を Property 経由で比較（名前は比較しない）
+	# 戻り値の型の検証 (共変性の許容)
 	var expected_ret = expected_method.return
 	var actual_ret = actual_method.return
-	if expected_ret.type != actual_ret.type:
+
+	# 期待側が Variant(TYPE_NIL) の場合は、実装側が具体的であっても成功とみなす
+	if expected_ret.type != TYPE_NIL and expected_ret.type != actual_ret.type:
 		err.append(
 			ERROR.ErrorMethodReturnTypeDiffer.new(
 				expected_method.name, expected_ret.type, actual_ret.type
