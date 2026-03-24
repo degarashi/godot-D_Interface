@@ -70,7 +70,7 @@ static func get_it(target: Object, getter: Getter, name: String) -> Variant:
 		return null
 
 	var tgt: Object = target.get_script() if target is not Script else target
-	var res := _get_from_script(tgt, getter, name)
+	var res = _get_from_script(tgt, getter, name)
 	if res:
 		return res
 

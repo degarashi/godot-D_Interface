@@ -130,7 +130,7 @@ static func validate(res: CHECK_RESULT, target_obj: Object, interface_type: Scri
 static func validate_signal(res: CHECK_RESULT, target: Object, interface_type: Script) -> void:
 	# インタフェース型に基づく期待シグナル一覧を走査
 	for expected_signal in CACHE.prepare_cache(interface_type).signal_a:
-		var actual_signal := C.get_signal(target, expected_signal.name)
+		var actual_signal = C.get_signal(target, expected_signal.name)
 		if actual_signal == null:
 			res.add_error(interface_type, ERROR.ErrorSignalNotFound.new(expected_signal.name))
 			continue
@@ -182,7 +182,7 @@ static func validate_signal(res: CHECK_RESULT, target: Object, interface_type: S
 static func validate_property(res: CHECK_RESULT, target: Object, interface_type: Script) -> void:
 	# インタフェース型に基づく期待プロパティ一覧を走査
 	for expected_prop in CACHE.prepare_cache(interface_type).property_a:
-		var actual_prop := C.get_property(target, expected_prop.name)
+		var actual_prop = C.get_property(target, expected_prop.name)
 		if actual_prop == null:
 			res.add_error(interface_type, ERROR.ErrorPropertyNotFound.new(expected_prop.name))
 			continue
@@ -194,7 +194,7 @@ static func validate_property(res: CHECK_RESULT, target: Object, interface_type:
 static func validate_method(res: CHECK_RESULT, target: Object, interface_type: Script) -> void:
 	# インタフェース型に基づく期待メソッド一覧を走査
 	for expected_method in CACHE.prepare_cache(interface_type).method_a:
-		var actual_method := C.get_method(target, expected_method.name)
+		var actual_method = C.get_method(target, expected_method.name)
 		if actual_method == null:
 			res.add_error(interface_type, ERROR.ErrorMethodNotFound.new(expected_method.name))
 			continue
