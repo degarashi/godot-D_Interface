@@ -3,13 +3,16 @@ extends Object
 
 ## @brief .ifc ファイルの内容からブリッジ用GDScriptを生成する
 static func generate_from_ifc(source_text: String, class_hint: String = "") -> String:
+	# 解析フェーズ
+	var parent_info := _extract_parent_info(source_text)
+	var my_defs := _parse_single_ifc(source_text)
+
 	var lines: Array[String] = []
 
 	# --- 警告ヘッダーの挿入 ---
 	lines.append("# " + "=".repeat(60))
 	lines.append("#  WARNING: AUTO-GENERATED FILE. DO NOT EDIT MANUALLY.")
 	lines.append("#  This file was generated from an .ifc definition.")
-	lines.append("#  Any manual changes will be overwritten on the next generation.")
 	lines.append("# " + "=".repeat(60))
 	lines.append("")
 
@@ -18,57 +21,89 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 	lines.append("# Generated at: {0}".format([current_time]))
 	lines.append("")
 
-	# class_name の生成 (i_mover -> MoverBridge)
+	# class_name の生成 (i_mover -> IMover)
 	if not class_hint.is_empty():
-		var clean_name := class_hint.trim_prefix("i_").capitalize().replace(" ", "")
-		lines.append("class_name I{0}".format([clean_name]))
+		lines.append("class_name {0}".format([_format_class_name(class_hint)]))
 
-	lines.append("extends InterfaceBase\n")
+	# --- 継承先の決定 ---
+	# 親がいればそのインターフェースクラス名、いなければ InterfaceBase
+	if not parent_info.class_name.is_empty():
+		lines.append("extends {0}\n".format([parent_info.class_name]))
+	else:
+		lines.append("extends InterfaceBase\n")
 
-	# 正規表現の準備
-	var re_func := RegEx.new()
-	# func 名前(引数) -> 戻り値  をキャプチャ
-	re_func.compile("func\\s+(?<name>\\w+)\\s*\\((?<args>.*)\\)\\s*(->\\s*(?<ret>[\\w.]+))?")
+	# 変数（プロパティ）の書き出し
+	for var_name in my_defs.vars:
+		var type = my_defs.vars[var_name]
+		lines.append("# Prop: {0}".format([var_name]))
+		lines.append("var {0}: {1}:".format([var_name, type]))
+		lines.append("	set(v): _impl.{0} = v".format([var_name]))
+		lines.append("	get: return _impl.{0}".format([var_name]))
+		lines.append("")
 
-	var re_var := RegEx.new()
-	# var 名前: 型  をキャプチャ
-	re_var.compile("var\\s+(?<name>\\w+)\\s*:\\s*(?<type>[\\w.]+)")
-
-	for raw_line in source_text.split("\n"):
-		var line := raw_line.strip_edges()
-		if line.is_empty() or line.begins_with("#"):
-			continue
-
-		# メソッドの解析
-		var m_func := re_func.search(line)
-		if m_func:
-			var name := m_func.get_string("name")
-			var args := m_func.get_string("args")
-			var ret := m_func.get_string("ret")
-			if ret.is_empty():
-				ret = "void"
-
-			lines.append("func {0}({1}) -> {2}:".format([name, args, ret]))
-			lines.append("	return _impl.{0}({1})".format([name, _extract_arg_names(args)]))
-			lines.append("")
-			continue
-
-		# 変数の解析
-		var m_var := re_var.search(line)
-		if m_var:
-			var name := m_var.get_string("name")
-			var type := m_var.get_string("type")
-
-			lines.append("# Prop: {0}".format([name]))
-			lines.append("var {0}: {1}:".format([name, type]))
-			lines.append("	set(v): _impl.{0} = v".format([name]))
-			lines.append("	get: return _impl.{0}".format([name]))
-			lines.append("")
+	# メソッドの書き出し
+	for func_name in my_defs.funcs:
+		var data = my_defs.funcs[func_name]
+		lines.append("func {0}({1}) -> {2}:".format([func_name, data.args, data.ret]))
+		lines.append("	return _impl.{0}({1})".format([func_name, _extract_arg_names(data.args)]))
+		lines.append("")
 
 	return "\n".join(lines)
 
 
-## @brief "val: Object, cb: Callable" から "val, cb" を抽出する
+## @brief extends 行から親のパスとクラス名を抽出する
+static func _extract_parent_info(text: String) -> Dictionary:
+	var info = {"path": "", "class_name": ""}
+	for raw_line in text.split("\n"):
+		var line := raw_line.strip_edges()
+		if line.begins_with("extends"):
+			# extends "res://path/to/i_base.ifc" からパスを抜き出す
+			var parts = line.split('"')
+			if parts.size() >= 2:
+				var path = parts[1]
+				info.path = path
+				info.class_name = _format_class_name(path.get_file().get_basename())
+			break
+	return info
+
+
+## @brief その .ifc ファイル自身の定義のみを解析する
+static func _parse_single_ifc(source_text: String) -> Dictionary:
+	var defs = {"funcs": {}, "vars": {}}
+
+	var re_func := RegEx.new()
+	re_func.compile("func\\s+(?<name>\\w+)\\s*\\((?<args>.*)\\)\\s*(->\\s*(?<ret>[\\w.]+))?")
+
+	var re_var := RegEx.new()
+	re_var.compile("var\\s+(?<name>\\w+)\\s*:\\s*(?<type>[\\w.]+)")
+
+	for raw_line in source_text.split("\n"):
+		var line := raw_line.strip_edges()
+		if line.is_empty() or line.begins_with("#") or line.begins_with("extends"):
+			continue
+
+		var m_func := re_func.search(line)
+		if m_func:
+			var ret = m_func.get_string("ret")
+			defs.funcs[m_func.get_string("name")] = {
+				"args": m_func.get_string("args"), "ret": ret if not ret.is_empty() else "void"
+			}
+			continue
+
+		var m_var := re_var.search(line)
+		if m_var:
+			defs.vars[m_var.get_string("name")] = m_var.get_string("type")
+
+	return defs
+
+
+## @brief ファイル名からインターフェースクラス名を生成 (i_pilot -> IPilot)
+static func _format_class_name(raw: String) -> String:
+	var clean := raw.trim_prefix("i_").capitalize().replace(" ", "")
+	return "I" + clean
+
+
+## @brief 引数文字列から名前だけを抽出
 static func _extract_arg_names(args_str: String) -> String:
 	if args_str.strip_edges().is_empty():
 		return ""
