@@ -9,12 +9,16 @@ const ERROR = preload("uid://c4n13cyd88clu")
 const C = preload("uid://beur775onkfdv")
 const GENERATOR = preload("uid://dknhe70ukestb")
 const EDITOR_SETTING_PATH = "d_interface/check/auto_check_on_reload"
+const AUTO_GENERATE_SETTING_PATH = "d_interface/check/auto_generate_bridge_on_save"
 const BRIDGE_MENU_TEXT = "Create Bridge Script from Selected"
 
 var ifc_importer: EditorImportPlugin = null
 
 
 func _enter_tree() -> void:
+	# 設定の準備
+	_prepare_editor_settings()
+
 	# インポーターの登録
 	if ifc_importer == null:
 		ifc_importer = preload("res://addons/d_interface/ifc_importer.gd").new()
@@ -27,6 +31,7 @@ func _enter_tree() -> void:
 	# ファイルシステムの変更（保存や削除、移動）を監視
 	var efs := get_editor_interface().get_resource_filesystem()
 	efs.resources_reload.connect(_on_resources_reload)
+	efs.resources_reload.connect(_auto_generate)
 
 
 func _exit_tree() -> void:
@@ -42,12 +47,15 @@ func _exit_tree() -> void:
 	var efs := get_editor_interface().get_resource_filesystem()
 	if efs.resources_reload.is_connected(_on_resources_reload):
 		efs.resources_reload.disconnect(_on_resources_reload)
+	if efs.resources_reload.is_connected(_auto_generate):
+		efs.resources_reload.disconnect(_auto_generate)
 
 
 ## @brief エディタ設定の準備
 func _prepare_editor_settings() -> void:
 	var settings := get_editor_interface().get_editor_settings()
 
+	# 自動検証設定
 	if not settings.has_setting(EDITOR_SETTING_PATH):
 		settings.set_setting(EDITOR_SETTING_PATH, true)
 
@@ -60,67 +68,95 @@ func _prepare_editor_settings() -> void:
 			"hint_string": "Enable automatic interface validation when resources are reloaded."
 		}
 	)
+
+	# 自動生成設定
+	if not settings.has_setting(AUTO_GENERATE_SETTING_PATH):
+		settings.set_setting(AUTO_GENERATE_SETTING_PATH, true)
+
+	settings.add_property_info(
+		{
+			"name": AUTO_GENERATE_SETTING_PATH,
+			"type": TYPE_BOOL,
+			"hint": PROPERTY_HINT_NONE,
+			"hint_string": "Automatically generate bridge .gd file when .ifc file is updated."
+		}
+	)
+
 	settings.set_initial_value(EDITOR_SETTING_PATH, true, false)
+	settings.set_initial_value(AUTO_GENERATE_SETTING_PATH, true, false)
 
 
 # ------------- [Editor Handling] -------------
 func _handles(object: Object) -> bool:
-	# インポートされたリソース、またはファイルパスから判定
-	if object is Resource:
-		return object.resource_path.ends_with(".ifc")
-	return false
+	return object is Resource and object.resource_path.ends_with(".ifc")
 
 
-## @brief .ifcファイルをダブルクリックした時にスクリプトエディタで開く
 func _edit(object: Object) -> void:
 	if not object is Resource:
 		return
 
-	var res := object as Resource
-	var path: String = res.resource_path
+	var global_path: String = ProjectSettings.globalize_path(object.resource_path)
+	if not global_path.ends_with(".ifc"):
+		return
 
-	if path.ends_with(".ifc"):
-		# リソースを一度ロードする
-		var target_res := load(path)
-		if not target_res:
-			return
+	var settings := get_editor_interface().get_editor_settings()
+	var use_external: bool = (
+		settings.get_setting("text_editor/external/use_external_editor")
+		if settings.has_setting("text_editor/external/use_external_editor")
+		else false
+	)
+	var exec_path: String = (
+		settings.get_setting("text_editor/external/exec_path")
+		if settings.has_setting("text_editor/external/exec_path")
+		else ""
+	)
+	var exec_flags: String = (
+		settings.get_setting("text_editor/external/exec_flags")
+		if settings.has_setting("text_editor/external/exec_flags")
+		else "{file}"
+	)
 
-		# edit_script()を使ってスクリプトエディタに表示させる
-		# このメソッドは ScriptEditor に直接「このリソースを表示しろ」と命令するため
-		# _handles の再帰呼び出し（オーバーフロー）をバイパスできます
-		get_editor_interface().edit_script(target_res)
+	if use_external and not exec_path.is_empty():
+		# プレースホルダ置換
+		var command_line := (
+			exec_flags.replace("{file}", global_path).replace("{line}", "1").replace("{col}", "1")
+		)
+
+		# 正規表現で「引用符内を保護しつつスペースで分割」する
+		# パターン解説:
+		#  "[^"]*"  -> 引用符で囲まれた文字列
+		#  |        -> または
+		#  \S+      -> 空白以外の連続した文字
+		var regex = RegEx.new()
+		regex.compile('"[^"]*"|\\S+')
+
+		var args: PackedStringArray = []
+		for result in regex.search_all(command_line):
+			var arg = result.get_string()
+			# 外部プロセスに渡す際、OS側で再度クォートされることがあるため、
+			# 自前で付けた引用符は外しておく（必要に応じて）
+			if arg.begins_with('"') and arg.ends_with('"'):
+				arg = arg.substr(1, arg.length() - 2)
+			args.append(arg)
+
+		OS.create_process(exec_path, args)
+		print("[Interface] Launched External: ", args)
+	else:
+		OS.shell_open(global_path)
 
 
-## @brief 選択中の.ifcファイルからブリッジGDScriptを生成する
-func _create_bridge_from_selected() -> void:
-	var selected_paths := get_editor_interface().get_selected_paths()
-	var created_files: Array[String] = []
+func _auto_generate(resources: PackedStringArray) -> void:
+	var settings := get_editor_interface().get_editor_settings()
+	if not settings.get_setting(AUTO_GENERATE_SETTING_PATH):
+		return
 
-	for path in selected_paths:
-		if not path.ends_with(".ifc"):
-			continue
+	var needs_rescan = false
+	for path in resources:
+		if path.ends_with(".ifc"):
+			_generate_bridge_file(path)
+			needs_rescan = true
 
-		var file_read := FileAccess.open(path, FileAccess.READ)
-		if not file_read:
-			continue
-
-		var source_text := file_read.get_as_text()
-		file_read.close()
-
-		var base_name := path.get_file().get_basename()  # "i_mover"
-		# generator.gd を使用してコード生成（クラス名のヒントを渡す）
-		var generated_code := GENERATOR.generate_from_ifc(source_text, base_name)
-		# .ifc と同じ場所に .gd を作成
-		var new_path := path.get_base_dir() + "/" + path.get_file().get_basename() + ".gd"
-
-		var file_write := FileAccess.open(new_path, FileAccess.WRITE)
-		if file_write:
-			file_write.store_string(generated_code)
-			file_write.close()
-			created_files.append(new_path.get_file())
-
-	if not created_files.is_empty():
-		print("[Interface] ✅ Generated: ", ", ".join(created_files))
+	if needs_rescan:
 		get_editor_interface().get_resource_filesystem().scan()
 
 
@@ -151,6 +187,44 @@ func _on_resources_reload(resources: PackedStringArray) -> void:
 						push_error(e.as_string())
 			else:
 				print("[InterfaceCheck] ✅ OK: ", path.get_file())
+
+
+## @brief 指定したパスの.ifcから.gdを生成する内部処理
+func _generate_bridge_file(path: String) -> void:
+	var file_read := FileAccess.open(path, FileAccess.READ)
+	if not file_read:
+		return
+
+	var source_text := file_read.get_as_text()
+	file_read.close()
+
+	var base_name := path.get_file().get_basename()
+	var generated_code := GENERATOR.generate_from_ifc(source_text, base_name)
+	var new_path := path.get_base_dir() + "/" + base_name + ".gd"
+
+	# 既存ファイルと内容が同じなら書き込まない（無限ループ防止）
+	if FileAccess.file_exists(new_path):
+		var existing_file := FileAccess.open(new_path, FileAccess.READ)
+		if existing_file and existing_file.get_as_text() == generated_code:
+			existing_file.close()
+			return
+		if existing_file:
+			existing_file.close()
+
+	var file_write := FileAccess.open(new_path, FileAccess.WRITE)
+	if file_write:
+		file_write.store_string(generated_code)
+		file_write.close()
+		print("[Interface] ⚡ Auto-generated bridge: ", new_path.get_file())
+
+
+func _create_bridge_from_selected() -> void:
+	var selected_paths := get_editor_interface().get_selected_paths()
+	for path in selected_paths:
+		if path.ends_with(".ifc"):
+			_generate_bridge_file(path)
+
+	get_editor_interface().get_resource_filesystem().scan()
 
 
 ## @brief エディタ上での入力を直接ハンドリングする
