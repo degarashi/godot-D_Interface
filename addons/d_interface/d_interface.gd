@@ -9,6 +9,7 @@ const CHECK_ALL_ACTION = "check_interface_all"
 const CHECK_RESULT = preload("uid://ck862o06krlja")
 const ERROR = preload("uid://c4n13cyd88clu")
 const C = preload("uid://beur775onkfdv")
+const EDITOR_SETTING_PATH = "d_interface/check/auto_check_on_reload"
 
 
 ## @brief プラグイン有効化処理
@@ -26,6 +27,8 @@ func _disable_plugin() -> void:
 ## @brief ツリー進入処理
 ## @details エディタツリーに入った際にメニュー項目を追加する処理
 func _enter_tree() -> void:
+	_prepare_editor_settings()
+
 	add_tool_menu_item(MENU_TEXT, Callable(self, "_check_interface_define_all"))
 	_register_shortcut()
 
@@ -34,8 +37,30 @@ func _enter_tree() -> void:
 	efs.resources_reload.connect(_on_resources_reload)
 
 
-## @brief リソースが再読み込みされた際のコールバック
+## @brief エディタ設定の準備
+func _prepare_editor_settings() -> void:
+	var settings := get_editor_interface().get_editor_settings()
+
+	if not settings.has_setting(EDITOR_SETTING_PATH):
+		settings.set_setting(EDITOR_SETTING_PATH, true)
+
+	# 設定画面で型や初期値を正しく認識させるためのヒント
+	settings.add_property_info(
+		{
+			"name": EDITOR_SETTING_PATH,
+			"type": TYPE_BOOL,
+			"hint": PROPERTY_HINT_NONE,
+			"hint_string": "Enable automatic interface validation when resources are reloaded."
+		}
+	)
+	settings.set_initial_value(EDITOR_SETTING_PATH, true, false)
+
+
 func _on_resources_reload(resources: PackedStringArray) -> void:
+	var settings := get_editor_interface().get_editor_settings()
+	if not settings.get_setting(EDITOR_SETTING_PATH):
+		return
+
 	# リロードされたリソースの中にスクリプトがあれば検証
 	for path in resources:
 		if not path.ends_with(".gd"):
