@@ -4,37 +4,44 @@ extends EditorPlugin
 # ------------- [Constants] -------------
 const MENU_TEXT = "Check Interface Defines"
 const VALIDATOR = preload("uid://b4t2yue08ojax")
-# ショートカットアクション名
-const CHECK_ALL_ACTION = "check_interface_all"
 const CHECK_RESULT = preload("uid://ck862o06krlja")
 const ERROR = preload("uid://c4n13cyd88clu")
 const C = preload("uid://beur775onkfdv")
+const GENERATOR = preload("uid://dknhe70ukestb")
 const EDITOR_SETTING_PATH = "d_interface/check/auto_check_on_reload"
+const BRIDGE_MENU_TEXT = "Create Bridge Script from Selected"
+
+var ifc_importer: EditorImportPlugin = null
 
 
-## @brief プラグイン有効化処理
-## @details プラグインが有効化された際に呼び出される処理
-func _enable_plugin() -> void:
-	pass
-
-
-## @brief プラグイン無効化処理
-## @details プラグインが無効化された際に呼び出される処理
-func _disable_plugin() -> void:
-	pass
-
-
-## @brief ツリー進入処理
-## @details エディタツリーに入った際にメニュー項目を追加する処理
 func _enter_tree() -> void:
-	_prepare_editor_settings()
+	# インポーターの登録
+	if ifc_importer == null:
+		ifc_importer = preload("res://addons/d_interface/ifc_importer.gd").new()
+		add_import_plugin(ifc_importer)
 
+	# メニュー登録
 	add_tool_menu_item(MENU_TEXT, Callable(self, "_check_interface_define_all"))
-	_register_shortcut()
+	add_tool_menu_item(BRIDGE_MENU_TEXT, Callable(self, "_create_bridge_from_selected"))
 
 	# ファイルシステムの変更（保存や削除、移動）を監視
 	var efs := get_editor_interface().get_resource_filesystem()
 	efs.resources_reload.connect(_on_resources_reload)
+
+
+func _exit_tree() -> void:
+	# 終了時は確実に解除
+	if ifc_importer != null:
+		remove_import_plugin(ifc_importer)
+		ifc_importer = null
+
+	remove_tool_menu_item(MENU_TEXT)
+	remove_tool_menu_item(BRIDGE_MENU_TEXT)
+
+	# シグナルの接続解除を追加
+	var efs := get_editor_interface().get_resource_filesystem()
+	if efs.resources_reload.is_connected(_on_resources_reload):
+		efs.resources_reload.disconnect(_on_resources_reload)
 
 
 ## @brief エディタ設定の準備
@@ -56,75 +63,107 @@ func _prepare_editor_settings() -> void:
 	settings.set_initial_value(EDITOR_SETTING_PATH, true, false)
 
 
+# ------------- [Editor Handling] -------------
+func _handles(object: Object) -> bool:
+	# インポートされたリソース、またはファイルパスから判定
+	if object is Resource:
+		return object.resource_path.ends_with(".ifc")
+	return false
+
+
+## @brief .ifcファイルをダブルクリックした時にスクリプトエディタで開く
+func _edit(object: Object) -> void:
+	if not object is Resource:
+		return
+
+	var res := object as Resource
+	var path: String = res.resource_path
+
+	if path.ends_with(".ifc"):
+		# リソースを一度ロードする
+		var target_res := load(path)
+		if not target_res:
+			return
+
+		# edit_script()を使ってスクリプトエディタに表示させる
+		# このメソッドは ScriptEditor に直接「このリソースを表示しろ」と命令するため
+		# _handles の再帰呼び出し（オーバーフロー）をバイパスできます
+		get_editor_interface().edit_script(target_res)
+
+
+## @brief 選択中の.ifcファイルからブリッジGDScriptを生成する
+func _create_bridge_from_selected() -> void:
+	var selected_paths := get_editor_interface().get_selected_paths()
+	var created_files: Array[String] = []
+
+	for path in selected_paths:
+		if not path.ends_with(".ifc"):
+			continue
+
+		var file_read := FileAccess.open(path, FileAccess.READ)
+		if not file_read:
+			continue
+
+		var source_text := file_read.get_as_text()
+		file_read.close()
+
+		var base_name := path.get_file().get_basename()  # "i_mover"
+		# generator.gd を使用してコード生成（クラス名のヒントを渡す）
+		var generated_code := GENERATOR.generate_from_ifc(source_text, base_name)
+		# .ifc と同じ場所に .gd を作成
+		var new_path := path.get_base_dir() + "/" + path.get_file().get_basename() + ".gd"
+
+		var file_write := FileAccess.open(new_path, FileAccess.WRITE)
+		if file_write:
+			file_write.store_string(generated_code)
+			file_write.close()
+			created_files.append(new_path.get_file())
+
+	if not created_files.is_empty():
+		print("[Interface] ✅ Generated: ", ", ".join(created_files))
+		get_editor_interface().get_resource_filesystem().scan()
+
+
+## @brief リソースのリロード時に自動検証を実行
 func _on_resources_reload(resources: PackedStringArray) -> void:
+	# エディタ設定がオフならスキップ
 	var settings := get_editor_interface().get_editor_settings()
 	if not settings.get_setting(EDITOR_SETTING_PATH):
 		return
 
 	# リロードされたリソースの中にスクリプトがあれば検証
 	for path in resources:
-		if not path.ends_with(".gd"):
-			continue
-
-		# addonsフォルダ内は無視
-		if path.begins_with("res://addons/"):
+		if not path.ends_with(".gd") or path.begins_with("res://addons/"):
 			continue
 
 		var res := load(path)
 		if not res is Script:
 			continue
 
-		var scr: Script = res
-
-		# 検品実行
-		var chk_res := _check_interface_define(scr)
-
+		# 検証実行
+		var chk_res := _check_interface_define(res)
 		if chk_res.is_checked:
 			if chk_res.has_error():
-				# エラーがある場合は目立つように
 				printerr("[InterfaceCheck] ❌ Error in: ", path.get_file())
 				for ifc in chk_res.errors:
-					for e in chk_res.get_errors(ifc):
+					var err_list := chk_res.get_errors(ifc)
+					for e in err_list:
 						push_error(e.as_string())
 			else:
-				# 成功時は控えめに通知
 				print("[InterfaceCheck] ✅ OK: ", path.get_file())
 
 
-## @brief ツリー退出処理
-## @details エディタツリーから出た際にメニュー項目を削除する処理
-func _exit_tree() -> void:
-	remove_tool_menu_item(MENU_TEXT)
-	_unregister_shortcut()
-
-
-func _input(_event: InputEvent) -> void:
-	if Input.is_action_just_pressed(CHECK_ALL_ACTION):
-		_check_interface_define_all()
-		get_tree().root.set_input_as_handled()
+## @brief エディタ上での入力を直接ハンドリングする
+func _shortcut_input(event: InputEvent) -> void:
+	# 例: Ctrl + Shift + I (InterfaceのI) で実行
+	if event is InputEventKey and event.pressed:
+		if event.keycode == KEY_I and event.ctrl_pressed and event.shift_pressed:
+			_check_interface_define_all()
+			# 入力を消費したことを伝えて、他の処理に流さないようにする
+			get_viewport().set_input_as_handled()
 
 
 # ------------- [Private Method] -------------
-func _register_shortcut() -> void:
-	# 入力マップにアクションを追加（プロジェクト設定ではなく一時的に利用）
-	if not InputMap.has_action(CHECK_ALL_ACTION):
-		InputMap.add_action(CHECK_ALL_ACTION)
-
-	var ev := InputEventKey.new()
-	ev.keycode = KEY_L
-	ev.shift_pressed = true
-	ev.ctrl_pressed = true
-
-	InputMap.action_erase_events(CHECK_ALL_ACTION)
-	InputMap.action_add_event(CHECK_ALL_ACTION, ev)
-	# プロジェクト設定への保存は行わない
-
-
-func _unregister_shortcut() -> void:
-	if InputMap.has_action(CHECK_ALL_ACTION):
-		InputMap.erase_action(CHECK_ALL_ACTION)
-
-
 func _check_interface_define_all() -> void:
 	print("----------------- begin interface defines check -----------------")
 	_check_interface_define_at("res://")
