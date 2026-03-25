@@ -53,13 +53,13 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 
 ## @brief extends 行から親のパスとクラス名を抽出する
 static func _extract_parent_info(text: String) -> Dictionary:
-	var info = {"path": "", "class_name": ""}
+	var info: Dictionary[String, String] = {"path": "", "class_name": ""}
 	for raw_line in text.split("\n"):
 		var line := raw_line.strip_edges()
 		if line.begins_with("extends"):
-			var parts = line.split('"')
+			var parts := line.split('"')
 			if parts.size() >= 2:
-				var raw_path = parts[1]
+				var raw_path := parts[1]
 				info.path = raw_path
 
 				# --- 物理ファイルの存在チェック ---
@@ -68,7 +68,7 @@ static func _extract_parent_info(text: String) -> Dictionary:
 						push_error("[Interface] Parent file not found at: %s" % raw_path)
 						# エラーは出すが、名前推測だけは続けて「型」としての体裁は保つ
 
-				var file_name = raw_path.get_file().get_basename()
+				var file_name := raw_path.get_file().get_basename()
 				info.class_name = _format_class_name(file_name)
 			break
 	return info
@@ -83,8 +83,8 @@ static func _is_global_script_exists(cls: String) -> bool:
 
 
 ## @brief その .ifc ファイル自身の定義のみを解析する
-static func _parse_single_ifc(source_text: String) -> Dictionary:
-	var defs = {"funcs": {}, "vars": {}}
+static func _parse_single_ifc(source_text: String) -> Dictionary[String, Dictionary]:
+	var defs: Dictionary[String, Dictionary] = {"funcs": {}, "vars": {}}
 
 	var re_func := RegEx.new()
 	re_func.compile("func\\s+(?<name>\\w+)\\s*\\((?<args>.*)\\)\\s*(->\\s*(?<ret>[\\w.]+))?")
@@ -99,7 +99,7 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 
 		var m_func := re_func.search(line)
 		if m_func:
-			var ret = m_func.get_string("ret")
+			var ret := m_func.get_string("ret")
 			defs.funcs[m_func.get_string("name")] = {
 				"args": m_func.get_string("args"), "ret": ret if not ret.is_empty() else "void"
 			}
