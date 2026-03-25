@@ -93,17 +93,35 @@ static func _validate_method(
 						)
 					)
 
-	# 戻り値の型の検証 (共変性の許容)
+	# 戻り値の比較
 	var expected_ret = expected_method.return
 	var actual_ret = actual_method.return
 
-	# 期待側が Variant(TYPE_NIL) の場合は、実装側が具体的であっても成功とみなす
-	if expected_ret.type != TYPE_NIL and expected_ret.type != actual_ret.type:
+	var is_ok := false
+	if expected_ret.type == actual_ret.type:
+		if expected_ret.type == TYPE_OBJECT:
+			var e_cls: StringName = expected_ret.get("class_name", &"")
+			var a_cls: StringName = actual_ret.get("class_name", &"")
+			is_ok = (
+				e_cls == &""
+				or a_cls == e_cls
+				or ClassDB.is_parent_class(a_cls, e_cls)
+				or _is_custom_class_parent(a_cls, e_cls)
+			)
+		else:
+			is_ok = true
+	elif expected_ret.type == TYPE_NIL:
+		is_ok = true
+
+	# 判定結果をエラー配列に反映させる
+	if not is_ok:
 		err.append(
 			ERROR.ErrorMethodReturnTypeDiffer.new(
 				expected_method.name, expected_ret.type, actual_ret.type
 			)
 		)
+
+	return err
 	return err
 
 
@@ -204,3 +222,79 @@ static func validate_method(res: CHECK_RESULT, target: Object, interface_type: S
 			continue
 
 		res.add_errors(interface_type, _validate_method(expected_method, actual_method, true, true))
+
+
+## @brief 型の互換性を検証する (共変性のサポート)
+## @param expected_type 期待される Variant.Type
+## @param actual_type 実装されている Variant.Type
+## @param expected_class 期待されるクラス名 (StringName)
+## @param actual_class 実装されているクラス名 (StringName)
+static func _is_type_compatible(
+	expected_type: int,
+	actual_type: int,
+	expected_class: StringName = &"",
+	actual_class: StringName = &""
+) -> bool:
+	# 1. 期待側が Variant(0) なら無条件でパス
+	if expected_type == TYPE_NIL:
+		return true
+
+	# 2. 基本型の一致チェック
+	if expected_type != actual_type:
+		return false
+
+	# 3. Object型の場合、クラスの継承関係を深掘りする
+	if expected_type == TYPE_OBJECT:
+		# 両方空なら、少なくとも Object 同士なのでパス
+		if expected_class == &"":
+			return true
+		# 実装側が空なのに期待側がクラス指定ありならエラー
+		if actual_class == &"":
+			return false
+		# 同一クラスならパス
+		if expected_class == actual_class:
+			return true
+
+		# 継承関係のチェック (実体が期待のサブクラスか)
+		# ClassDB はエンジン標準クラス (Node, Resource等) を判定
+		if ClassDB.is_parent_class(actual_class, expected_class):
+			return true
+
+		# カスタムクラス (class_name) の継承関係を判定
+		if _is_custom_class_parent(actual_class, expected_class):
+			return true
+
+		return false
+
+	return true
+
+
+## @brief カスタムクラス (class_name) の継承関係を再帰的にチェック
+static func _is_custom_class_parent(actual: StringName, expected: StringName) -> bool:
+	if actual == &"" or expected == &"":
+		return false
+
+	var current := actual
+	var global_classes := ProjectSettings.get_global_class_list()
+
+	# 無限ループ防止用のカウンター（念のため）
+	var safety_limit := 100
+
+	while current != &"" and safety_limit > 0:
+		safety_limit -= 1
+		var found := false
+
+		for c in global_classes:
+			if c["class"] == current:
+				var base: String = c["base"]
+				if base == expected:
+					return true
+				current = base
+				found = true
+				break
+
+		# global_class_list に見つからない、またはベースがなくなった
+		if not found:
+			break
+
+	return false
