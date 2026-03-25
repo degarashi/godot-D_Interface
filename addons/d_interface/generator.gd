@@ -32,6 +32,14 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 	else:
 		lines.append("extends InterfaceBase\n")
 
+	# シグナルの宣言
+	for sig_name: String in my_defs.signals:
+		var data: Dictionary = my_defs.signals[sig_name]
+		lines.append("signal {0}({1})".format([sig_name, data.args]))
+
+	if not my_defs.signals.is_empty():
+		lines.append("")
+
 	# 変数（プロパティ）の書き出し
 	for var_name in my_defs.vars:
 		var type = my_defs.vars[var_name]
@@ -52,7 +60,7 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 
 
 ## @brief extends 行から親のパスとクラス名を抽出する
-static func _extract_parent_info(text: String) -> Dictionary:
+static func _extract_parent_info(text: String) -> Dictionary[String, String]:
 	var info: Dictionary[String, String] = {"path": "", "class_name": ""}
 	for raw_line in text.split("\n"):
 		var line := raw_line.strip_edges()
@@ -74,17 +82,9 @@ static func _extract_parent_info(text: String) -> Dictionary:
 	return info
 
 
-## @brief global_class (project.godotに登録されたもの) に存在するか確認
-static func _is_global_script_exists(cls: String) -> bool:
-	for c in ProjectSettings.get_global_class_list():
-		if c["class"] == cls:
-			return true
-	return false
-
-
 ## @brief その .ifc ファイル自身の定義のみを解析する
 static func _parse_single_ifc(source_text: String) -> Dictionary[String, Dictionary]:
-	var defs: Dictionary[String, Dictionary] = {"funcs": {}, "vars": {}}
+	var defs: Dictionary[String, Dictionary] = {"funcs": {}, "vars": {}, "signals": {}}
 
 	var re_func := RegEx.new()
 	re_func.compile("func\\s+(?<name>\\w+)\\s*\\((?<args>.*)\\)\\s*(->\\s*(?<ret>[\\w.]+))?")
@@ -92,9 +92,17 @@ static func _parse_single_ifc(source_text: String) -> Dictionary[String, Diction
 	var re_var := RegEx.new()
 	re_var.compile("var\\s+(?<name>\\w+)\\s*:\\s*(?<type>[\\w.]+)")
 
-	for raw_line in source_text.split("\n"):
+	var re_sig := RegEx.new()
+	re_sig.compile("signal\\s+(?<name>\\w+)\\s*(\\((?<args>.*)\\))?")
+
+	for raw_line: String in source_text.split("\n"):
 		var line := raw_line.strip_edges()
 		if line.is_empty() or line.begins_with("#") or line.begins_with("extends"):
+			continue
+
+		var m_sig := re_sig.search(line)
+		if m_sig:
+			defs.signals[m_sig.get_string("name")] = {"args": m_sig.get_string("args")}
 			continue
 
 		var m_func := re_func.search(line)
