@@ -150,13 +150,16 @@ func _auto_generate(resources: PackedStringArray) -> void:
 	if not settings.get_setting(AUTO_GENERATE_SETTING_PATH):
 		return
 
-	var needs_rescan = false
+	var needs_rescan := false
+	print("[Interface] Checking for .ifc changes in reimported resources...")
 	for path in resources:
 		if path.ends_with(".ifc"):
+			print("[Interface] Detected change in: ", path)
 			_generate_bridge_file(path)
 			needs_rescan = true
 
 	if needs_rescan:
+		print("[Interface] Requesting filesystem scan after bridge generation.")
 		get_editor_interface().get_resource_filesystem().scan()
 
 
