@@ -31,7 +31,7 @@ func _enter_tree() -> void:
 	# ファイルシステムの変更（保存や削除、移動）を監視
 	var efs := get_editor_interface().get_resource_filesystem()
 	efs.resources_reload.connect(_on_resources_reload)
-	efs.resources_reload.connect(_auto_generate)
+	efs.resources_reimported.connect(_auto_generate)
 
 
 func _exit_tree() -> void:
@@ -47,8 +47,8 @@ func _exit_tree() -> void:
 	var efs := get_editor_interface().get_resource_filesystem()
 	if efs.resources_reload.is_connected(_on_resources_reload):
 		efs.resources_reload.disconnect(_on_resources_reload)
-	if efs.resources_reload.is_connected(_auto_generate):
-		efs.resources_reload.disconnect(_auto_generate)
+	if efs.resources_reimported.is_connected(_auto_generate):
+		efs.resources_reimported.disconnect(_auto_generate)
 
 
 ## @brief エディタ設定の準備
