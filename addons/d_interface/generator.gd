@@ -32,6 +32,14 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 	else:
 		lines.append("extends InterfaceBase\n")
 
+	# Enumの書き出し
+	for enum_name: String in my_defs.enums:
+		var values: String = my_defs.enums[enum_name]
+		lines.append("enum {0} { {1} }".format([enum_name, values]))
+
+	if not my_defs.enums.is_empty():
+		lines.append("")
+
 	# シグナルの宣言
 	for sig_name: String in my_defs.signals:
 		var data: Dictionary = my_defs.signals[sig_name]
@@ -84,7 +92,16 @@ static func _extract_parent_info(text: String) -> Dictionary[String, String]:
 
 ## @brief その .ifc ファイル自身の定義のみを解析する
 static func _parse_single_ifc(source_text: String) -> Dictionary[String, Dictionary]:
-	var defs: Dictionary[String, Dictionary] = {"funcs": {}, "vars": {}, "signals": {}}
+	var defs: Dictionary[String, Dictionary] = {"funcs": {}, "vars": {}, "signals": {}, "enums": {}}
+
+	# 複数行Enumの解析
+	var re_enum_block := RegEx.new()
+	re_enum_block.compile("enum\\s+(?<name>\\w+)\\s*\\{(?<values>[^}]*)\\}")
+	var enum_matches := re_enum_block.search_all(source_text)
+	for m: RegExMatch in enum_matches:
+		var name := m.get_string("name")
+		var values := m.get_string("values").strip_edges().replace("\n", " ")
+		defs.enums[name] = values
 
 	var re_func := RegEx.new()
 	re_func.compile("func\\s+(?<name>\\w+)\\s*\\((?<args>.*)\\)\\s*(->\\s*(?<ret>[\\w.]+))?")
@@ -95,16 +112,25 @@ static func _parse_single_ifc(source_text: String) -> Dictionary[String, Diction
 	var re_sig := RegEx.new()
 	re_sig.compile("signal\\s+(?<name>\\w+)\\s*(\\((?<args>.*)\\))?")
 
+	# Enum以外の定義を行単位で解析
 	for raw_line: String in source_text.split("\n"):
 		var line := raw_line.strip_edges()
-		if line.is_empty() or line.begins_with("#") or line.begins_with("extends"):
+		if (
+			line.is_empty()
+			or line.begins_with("#")
+			or line.begins_with("extends")
+			or line.begins_with("enum")
+			or line == "}"
+		):
 			continue
 
+		# Signal
 		var m_sig := re_sig.search(line)
 		if m_sig:
 			defs.signals[m_sig.get_string("name")] = {"args": m_sig.get_string("args")}
 			continue
 
+		# Function
 		var m_func := re_func.search(line)
 		if m_func:
 			var ret := m_func.get_string("ret")
@@ -113,6 +139,7 @@ static func _parse_single_ifc(source_text: String) -> Dictionary[String, Diction
 			}
 			continue
 
+		# Variable
 		var m_var := re_var.search(line)
 		if m_var:
 			defs.vars[m_var.get_string("name")] = m_var.get_string("type")
