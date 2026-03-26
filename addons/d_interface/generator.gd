@@ -79,6 +79,15 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 	lines.append("	return Interface.as_interface(obj, {0}) as {0}".format([class_name_str]))
 	lines.append("")
 
+	lines.append("static func cast_checked(obj: Object) -> {0}:".format([class_name_str]))
+	lines.append("	var res := cast(obj)")
+	lines.append(
+		'	assert(res != null, "[Interface] Cast failed: Object does not implement {0}")'.format(
+			[class_name_str]
+		)
+	)
+	lines.append("	return res")
+	lines.append("")
 	return "\n".join(lines)
 
 
