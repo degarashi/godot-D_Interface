@@ -226,25 +226,26 @@ static func update_implements_boilerplate(path: String) -> void:
 	const LIST_START = "# --- INTERFACE LIST (AUTO-GENERATED) ---"
 	const IMPL_START = "# --- INTERFACE IMPLEMENTER (AUTO-GENERATED) ---"
 	const IMPL_END = "# --- END INTERFACE IMPLEMENTER ---"
+	const STUB_START = "# --- INTERFACE METHODS (STUBS) ---"
+	const STUB_END = "# --- END INTERFACE METHODS ---"
 
 	# すでにブロックが存在するかチェック
 	var has_list_block := source.contains(LIST_START)
 	var has_impl_block := source.contains(IMPL_START)
-
-	# ユーザーが手動で get_implementer / set_implementer を書いているかチェック
+	var has_stub_block := source.contains(STUB_START)
 	var has_manual_impl := (
 		source.contains("func get_implementer") or source.contains("func set_implementer")
 	)
 
-	# どちらのブロックも必要なければ終了
-	if has_list_block and (has_impl_block or has_manual_impl):
+	# すべて揃っているなら何もしない
+	if has_list_block and (has_impl_block or has_manual_impl) and has_stub_block:
 		return
 
 	# 末尾の空行を掃除
 	while lines.size() > 0 and lines[-1].strip_edges().is_empty():
 		lines.remove_at(lines.size() - 1)
 
-	# Listブロックがない場合のみ生成
+	# LISTブロック
 	if not has_list_block:
 		lines.append("")
 		lines.append(LIST_START)
@@ -252,7 +253,7 @@ static func update_implements_boilerplate(path: String) -> void:
 		lines.append("	return [{0}]".format([", ".join(ifc_names)]))
 		lines.append("# --- END INTERFACE LIST ---")
 
-	# Implementerブロックがなく、かつ手動実装もされていない場合のみ生成
+	# IMPLEMENTERブロック
 	if not has_impl_block and not has_manual_impl:
 		lines.append("")
 		lines.append(IMPL_START)
@@ -260,12 +261,65 @@ static func update_implements_boilerplate(path: String) -> void:
 		lines.append("	return self")
 		lines.append(IMPL_END)
 
-	lines.append("")
+	# METHODS (STUBS)ブロック
+	if not has_stub_block:
+		var stubs: Array[String] = []
+		for ifc_name in ifc_names:
+			var ifc_path := _find_ifc_path_by_name(ifc_name)
+			if ifc_path.is_empty():
+				continue
 
-	# 書き込み
+			var ifc_file := FileAccess.open(ifc_path, FileAccess.READ)
+			var defs := _parse_single_ifc(ifc_file.get_as_text())
+			ifc_file.close()
+
+			for func_name in defs.funcs:
+				var re_func_check := RegEx.new()
+				# 行頭(または空白後)に func があり、コメントアウトされていないことを確認
+				re_func_check.compile("(?m)^\\s*func\\s+" + func_name + "\\s*\\(")
+				if re_func_check.search(source):
+					continue
+				var d = defs.funcs[func_name]
+				stubs.append("\n## @interface {0}".format([ifc_name]))
+				stubs.append("func {0}({1}) -> {2}:".format([func_name, d.args, d.ret]))
+				stubs.append("    pass # TODO: Implement")
+
+		if not stubs.is_empty():
+			lines.append("\n" + STUB_START)
+			lines.append_array(stubs)
+			lines.append(STUB_END)
+
+	lines.append("")
 	var new_source := "\n".join(lines)
 	if source != new_source:
 		var fw := FileAccess.open(path, FileAccess.WRITE)
 		fw.store_string(new_source)
 		fw.close()
 		print("[Interface] Injected missing boilerplate for: ", path.get_file())
+
+
+## @brief クラス名(IMover)から対応する .ifc パスを探索する
+static func _find_ifc_path_by_name(cls: String) -> String:
+	var target_file := cls.to_snake_case()
+	if not target_file.begins_with("i_"):
+		target_file = "i_" + target_file
+	target_file += ".ifc"
+
+	return _search_file_recursive("res://", target_file)
+
+
+static func _search_file_recursive(dir_path: String, target_name: String) -> String:
+	var dir := DirAccess.open(dir_path)
+	if not dir:
+		return ""
+	dir.list_dir_begin()
+	var file_name := dir.get_next()
+	while file_name != "":
+		if dir.current_is_dir() and not file_name.begins_with("."):
+			var res := _search_file_recursive(dir_path.path_join(file_name), target_name)
+			if res != "":
+				return res
+		elif file_name == target_name:
+			return dir_path.path_join(file_name)
+		file_name = dir.get_next()
+	return ""
