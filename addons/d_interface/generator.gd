@@ -197,3 +197,63 @@ static func _extract_arg_names(args_str: String) -> String:
 		var kv := part.split(":")
 		names.append(kv[0].strip_edges())
 	return ", ".join(names)
+
+
+## @brief 実装クラス（.gd）にボイラープレートを自動注入する
+static func update_implements_boilerplate(path: String) -> void:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if not f:
+		return
+	var source := f.get_as_text()
+	f.close()
+
+	var lines := source.split("\n")
+	var ifc_names: Array[String] = []
+	var re_marker := RegEx.new()
+	re_marker.compile("(?m)^#\\s*implements\\s+(?<names>[\\w\\s,]+?)(?=\\r?$|\\n|$)")
+
+	# マーカーを探す
+	var m := re_marker.search(source)
+	if not m:
+		return  # マーカーがなければ何もしない
+
+	for name in m.get_string("names").split(","):
+		var n := name.strip_edges()
+		if not n.is_empty():
+			ifc_names.append(n)
+
+	# 既存の自動生成ブロックを特定して削除
+	var start_idx := -1
+	var end_idx := -1
+	for i in range(lines.size()):
+		if lines[i].begins_with("# --- INTERFACE IMPLEMENTATION"):
+			start_idx = i
+		if lines[i].begins_with("# --- END INTERFACE"):
+			end_idx = i
+			break
+
+	if start_idx != -1 and end_idx != -1:
+		for i in range(end_idx - start_idx + 1):
+			lines.remove_at(start_idx)
+
+	# 末尾の空行を掃除して新しいブロックを挿入
+	while lines.size() > 0 and lines[-1].strip_edges().is_empty():
+		lines.remove_at(lines.size() - 1)
+
+	lines.append("")
+	lines.append("# --- INTERFACE IMPLEMENTATION (AUTO-GENERATED) ---")
+	lines.append("static func implements_list() -> Array[Script]:")
+	lines.append("	return [{0}]".format([", ".join(ifc_names)]))
+	lines.append("")
+	lines.append("func get_implementer(_t: Script) -> Object:")
+	lines.append("	return self")
+	lines.append("# --- END INTERFACE IMPLEMENTATION ---")
+	lines.append("")
+
+	# 書き込み（ソースが変わっている場合のみ）
+	var new_source := "\n".join(lines)
+	if source != new_source:
+		var fw := FileAccess.open(path, FileAccess.WRITE)
+		fw.store_string(new_source)
+		fw.close()
+		print("[Interface] Updated implements for: ", path.get_file())

@@ -163,6 +163,10 @@ func _auto_generate(resources: PackedStringArray) -> void:
 		get_editor_interface().get_resource_filesystem().scan()
 
 
+func _inject_block(path: String) -> void:
+	GENERATOR.update_implements_boilerplate(path)
+
+
 ## @brief リソースのリロード時に自動検証を実行
 func _on_resources_reload(resources: PackedStringArray) -> void:
 	# エディタ設定がオフならスキップ
@@ -178,6 +182,8 @@ func _on_resources_reload(resources: PackedStringArray) -> void:
 		var res := load(path)
 		if not res is Script:
 			continue
+
+		_inject_block(path)
 
 		# 検証実行
 		var chk_res := _check_interface_define(res)
