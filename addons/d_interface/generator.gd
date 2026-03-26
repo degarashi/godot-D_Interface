@@ -22,8 +22,9 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 	lines.append("")
 
 	# class_name の生成 (i_mover -> IMover)
+	var class_name_str := _format_class_name(class_hint)
 	if not class_hint.is_empty():
-		lines.append("class_name {0}".format([_format_class_name(class_hint)]))
+		lines.append("class_name {0}".format([class_name_str]))
 
 	# --- 継承先の決定 ---
 	# 親がいればそのインターフェースクラス名、いなければ InterfaceBase
@@ -43,6 +44,7 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 	# シグナルの宣言
 	for sig_name: String in my_defs.signals:
 		var data: Dictionary = my_defs.signals[sig_name]
+		_append_comments(lines, data)
 		lines.append("signal {0}({1})".format([sig_name, data.args]))
 
 	if not my_defs.signals.is_empty():
@@ -50,9 +52,9 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 
 	# 変数（プロパティ）の書き出し
 	for var_name in my_defs.vars:
-		var type = my_defs.vars[var_name]
-		lines.append("# Prop: {0}".format([var_name]))
-		lines.append("var {0}: {1}:".format([var_name, type]))
+		var data: Dictionary = my_defs.vars[var_name]
+		_append_comments(lines, data)
+		lines.append("var {0}: {1}:".format([var_name, data.type]))
 		lines.append("	set(v): _impl.{0} = v".format([var_name]))
 		lines.append("	get: return _impl.{0}".format([var_name]))
 		lines.append("")
@@ -60,6 +62,7 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 	# メソッドの書き出し
 	for func_name in my_defs.funcs:
 		var data = my_defs.funcs[func_name]
+		_append_comments(lines, data)
 		lines.append("func {0}({1}) -> {2}:".format([func_name, data.args, data.ret]))
 
 		# 戻り値が void かどうかで return の有無を切り替える
@@ -72,12 +75,18 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 		lines.append("")
 
 	# --- 補助関数の追加 ---
-	var class_name_str := _format_class_name(class_hint)
 	lines.append("static func cast(obj: Object) -> {0}:".format([class_name_str]))
 	lines.append("	return Interface.as_interface(obj, {0}) as {0}".format([class_name_str]))
 	lines.append("")
 
 	return "\n".join(lines)
+
+
+## @brief 溜めていたコメント行を書き出す
+static func _append_comments(lines: Array[String], data: Dictionary) -> void:
+	if data.has("comment"):
+		for c in data.comment:
+			lines.append(c)
 
 
 ## @brief extends 行から親のパスとクラス名を抽出する
@@ -106,6 +115,7 @@ static func _extract_parent_info(text: String) -> Dictionary[String, String]:
 ## @brief その .ifc ファイル自身の定義のみを解析する
 static func _parse_single_ifc(source_text: String) -> Dictionary[String, Dictionary]:
 	var defs: Dictionary[String, Dictionary] = {"funcs": {}, "vars": {}, "signals": {}, "enums": {}}
+	var comment_buffer: Array[String] = []
 
 	# 複数行Enumの解析
 	var re_enum_block := RegEx.new()
@@ -128,19 +138,24 @@ static func _parse_single_ifc(source_text: String) -> Dictionary[String, Diction
 	# Enum以外の定義を行単位で解析
 	for raw_line: String in source_text.split("\n"):
 		var line := raw_line.strip_edges()
-		if (
-			line.is_empty()
-			or line.begins_with("#")
-			or line.begins_with("extends")
-			or line.begins_with("enum")
-			or line == "}"
-		):
+
+		# ドキュメントコメントの収集
+		if line.begins_with("##"):
+			comment_buffer.append(line)
+			continue
+
+		# 定義に直結しない行（空行や通常コメント）があればバッファを捨てる
+		if line.is_empty() or (line.begins_with("#") and not line.begins_with("##")):
+			comment_buffer.clear()
 			continue
 
 		# Signal
 		var m_sig := re_sig.search(line)
 		if m_sig:
-			defs.signals[m_sig.get_string("name")] = {"args": m_sig.get_string("args")}
+			defs.signals[m_sig.get_string("name")] = {
+				"args": m_sig.get_string("args"), "comment": comment_buffer.duplicate()
+			}
+			comment_buffer.clear()
 			continue
 
 		# Function
@@ -148,14 +163,21 @@ static func _parse_single_ifc(source_text: String) -> Dictionary[String, Diction
 		if m_func:
 			var ret := m_func.get_string("ret")
 			defs.funcs[m_func.get_string("name")] = {
-				"args": m_func.get_string("args"), "ret": ret if not ret.is_empty() else "void"
+				"args": m_func.get_string("args"),
+				"ret": ret if not ret.is_empty() else "void",
+				"comment": comment_buffer.duplicate()
 			}
+			comment_buffer.clear()
 			continue
 
 		# Variable
 		var m_var := re_var.search(line)
 		if m_var:
-			defs.vars[m_var.get_string("name")] = m_var.get_string("type")
+			defs.vars[m_var.get_string("name")] = {
+				"type": m_var.get_string("type"), "comment": comment_buffer.duplicate()
+			}
+			comment_buffer.clear()
+			continue
 
 	return defs
 
