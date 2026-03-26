@@ -70,6 +70,13 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 				"    return _impl.{0}({1})".format([func_name, _extract_arg_names(data.args)])
 			)
 		lines.append("")
+
+	# --- 補助関数の追加 ---
+	var class_name_str := _format_class_name(class_hint)
+	lines.append("static func cast(obj: Object) -> {0}:".format([class_name_str]))
+	lines.append("    return Interface.as_interface(obj, {0}) as {0}".format([class_name_str]))
+	lines.append("")
+
 	return "\n".join(lines)
 
 
