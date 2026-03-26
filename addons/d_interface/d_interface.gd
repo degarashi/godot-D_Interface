@@ -8,8 +8,12 @@ const CHECK_RESULT = preload("uid://ck862o06krlja")
 const ERROR = preload("uid://c4n13cyd88clu")
 const C = preload("uid://beur775onkfdv")
 const GENERATOR = preload("uid://dknhe70ukestb")
+
+# Settings Paths
 const EDITOR_SETTING_PATH = "d_interface/check/auto_check_on_reload"
 const AUTO_GENERATE_SETTING_PATH = "d_interface/check/auto_generate_bridge_on_save"
+const AUTO_INJECT_SETTING_PATH = "d_interface/check/auto_inject_boilerplate_on_reload"
+
 const BRIDGE_MENU_TEXT = "Create Bridge Script from Selected"
 
 var ifc_importer: EditorImportPlugin = null
@@ -43,7 +47,7 @@ func _exit_tree() -> void:
 	remove_tool_menu_item(MENU_TEXT)
 	remove_tool_menu_item(BRIDGE_MENU_TEXT)
 
-	# シグナルの接続解除を追加
+	# シグナルの接続解除
 	var efs := get_editor_interface().get_resource_filesystem()
 	if efs.resources_reload.is_connected(_on_resources_reload):
 		efs.resources_reload.disconnect(_on_resources_reload)
@@ -69,7 +73,7 @@ func _prepare_editor_settings() -> void:
 		}
 	)
 
-	# 自動生成設定
+	# 自動生成設定 (.ifc -> .gd)
 	if not settings.has_setting(AUTO_GENERATE_SETTING_PATH):
 		settings.set_setting(AUTO_GENERATE_SETTING_PATH, true)
 
@@ -82,8 +86,22 @@ func _prepare_editor_settings() -> void:
 		}
 	)
 
+	# 自動注入設定 (implements boilerplate)
+	if not settings.has_setting(AUTO_INJECT_SETTING_PATH):
+		settings.set_setting(AUTO_INJECT_SETTING_PATH, true)
+	settings.add_property_info(
+		{
+			"name": AUTO_INJECT_SETTING_PATH,
+			"type": TYPE_BOOL,
+			"hint": PROPERTY_HINT_NONE,
+			"hint_string":
+			"Automatically inject interface boilerplate based on # implements marker."
+		}
+	)
+
 	settings.set_initial_value(EDITOR_SETTING_PATH, true, false)
 	settings.set_initial_value(AUTO_GENERATE_SETTING_PATH, true, false)
+	settings.set_initial_value(AUTO_INJECT_SETTING_PATH, true, false)
 
 
 # ------------- [Editor Handling] -------------
@@ -171,31 +189,38 @@ func _inject_block(path: String) -> void:
 func _on_resources_reload(resources: PackedStringArray) -> void:
 	# エディタ設定がオフならスキップ
 	var settings := get_editor_interface().get_editor_settings()
-	if not settings.get_setting(EDITOR_SETTING_PATH):
+	var auto_check: bool = settings.get_setting(EDITOR_SETTING_PATH)
+	var auto_inject: bool = settings.get_setting(AUTO_INJECT_SETTING_PATH)
+
+	# どちらの設定もオフなら何もしない
+	if not auto_check and not auto_inject:
 		return
 
-	# リロードされたリソースの中にスクリプトがあれば検証
+	# リロードされたリソースの中にスクリプトがあれば処理
 	for path in resources:
 		if not path.ends_with(".gd") or path.begins_with("res://addons/"):
 			continue
 
-		var res := load(path)
-		if not res is Script:
-			continue
+		# ボイラープレートの注入（検証前に行う）
+		if auto_inject:
+			_inject_block(path)
 
-		_inject_block(path)
+		# 検証処理
+		if auto_check:
+			var res := load(path)
+			if not res is Script:
+				continue
 
-		# 検証実行
-		var chk_res := _check_interface_define(res)
-		if chk_res.is_checked:
-			if chk_res.has_error():
-				printerr("[InterfaceCheck] ❌ Error in: ", path.get_file())
-				for ifc in chk_res.errors:
-					var err_list := chk_res.get_errors(ifc)
-					for e in err_list:
-						push_error(e.as_string())
-			else:
-				print("[InterfaceCheck] ✅ OK: ", path.get_file())
+			var chk_res := _check_interface_define(res)
+			if chk_res.is_checked:
+				if chk_res.has_error():
+					printerr("[InterfaceCheck] ❌ Error in: ", path.get_file())
+					for ifc in chk_res.errors:
+						var err_list := chk_res.get_errors(ifc)
+						for e in err_list:
+							push_error(e.as_string())
+				else:
+					print("[InterfaceCheck] ✅ OK: ", path.get_file())
 
 
 ## @brief 指定したパスの.ifcから.gdを生成する内部処理
