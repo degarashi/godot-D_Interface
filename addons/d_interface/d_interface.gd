@@ -181,10 +181,6 @@ func _auto_generate(resources: PackedStringArray) -> void:
 		get_editor_interface().get_resource_filesystem().scan()
 
 
-func _inject_block(path: String) -> void:
-	GENERATOR.update_implements_boilerplate(path)
-
-
 ## @brief リソースのリロード時に自動検証を実行
 func _on_resources_reload(resources: PackedStringArray) -> void:
 	# エディタ設定がオフならスキップ
@@ -203,7 +199,7 @@ func _on_resources_reload(resources: PackedStringArray) -> void:
 
 		# ボイラープレートの注入（検証前に行う）
 		if auto_inject:
-			_inject_block(path)
+			GENERATOR.update_implements_boilerplate(path)
 
 		# 検証処理
 		if auto_check:
