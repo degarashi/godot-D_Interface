@@ -61,9 +61,15 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 	for func_name in my_defs.funcs:
 		var data = my_defs.funcs[func_name]
 		lines.append("func {0}({1}) -> {2}:".format([func_name, data.args, data.ret]))
-		lines.append("	return _impl.{0}({1})".format([func_name, _extract_arg_names(data.args)]))
-		lines.append("")
 
+		# 戻り値が void かどうかで return の有無を切り替える
+		if data.ret == "void":
+			lines.append("    _impl.{0}({1})".format([func_name, _extract_arg_names(data.args)]))
+		else:
+			lines.append(
+				"    return _impl.{0}({1})".format([func_name, _extract_arg_names(data.args)])
+			)
+		lines.append("")
 	return "\n".join(lines)
 
 
