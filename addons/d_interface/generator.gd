@@ -222,38 +222,50 @@ static func update_implements_boilerplate(path: String) -> void:
 		if not n.is_empty():
 			ifc_names.append(n)
 
-	# 既存の自動生成ブロックを特定して削除
-	var start_idx := -1
-	var end_idx := -1
-	for i in range(lines.size()):
-		if lines[i].begins_with("# --- INTERFACE IMPLEMENTATION"):
-			start_idx = i
-		if lines[i].begins_with("# --- END INTERFACE"):
-			end_idx = i
-			break
+	# ブロック定義タグ
+	const LIST_START = "# --- INTERFACE LIST (AUTO-GENERATED) ---"
+	const IMPL_START = "# --- INTERFACE IMPLEMENTER (AUTO-GENERATED) ---"
+	const IMPL_END = "# --- END INTERFACE IMPLEMENTER ---"
 
-	if start_idx != -1 and end_idx != -1:
-		for i in range(end_idx - start_idx + 1):
-			lines.remove_at(start_idx)
+	# すでにブロックが存在するかチェック
+	var has_list_block := source.contains(LIST_START)
+	var has_impl_block := source.contains(IMPL_START)
 
-	# 末尾の空行を掃除して新しいブロックを挿入
+	# ユーザーが手動で get_implementer / set_implementer を書いているかチェック
+	var has_manual_impl := (
+		source.contains("func get_implementer") or source.contains("func set_implementer")
+	)
+
+	# どちらのブロックも必要なければ終了
+	if has_list_block and (has_impl_block or has_manual_impl):
+		return
+
+	# 末尾の空行を掃除
 	while lines.size() > 0 and lines[-1].strip_edges().is_empty():
 		lines.remove_at(lines.size() - 1)
 
-	lines.append("")
-	lines.append("# --- INTERFACE IMPLEMENTATION (AUTO-GENERATED) ---")
-	lines.append("static func implements_list() -> Array[Script]:")
-	lines.append("	return [{0}]".format([", ".join(ifc_names)]))
-	lines.append("")
-	lines.append("func get_implementer(_t: Script) -> Object:")
-	lines.append("	return self")
-	lines.append("# --- END INTERFACE IMPLEMENTATION ---")
+	# Listブロックがない場合のみ生成
+	if not has_list_block:
+		lines.append("")
+		lines.append(LIST_START)
+		lines.append("static func implements_list() -> Array[Script]:")
+		lines.append("	return [{0}]".format([", ".join(ifc_names)]))
+		lines.append("# --- END INTERFACE LIST ---")
+
+	# Implementerブロックがなく、かつ手動実装もされていない場合のみ生成
+	if not has_impl_block and not has_manual_impl:
+		lines.append("")
+		lines.append(IMPL_START)
+		lines.append("func get_implementer(_t: Script) -> Object:")
+		lines.append("	return self")
+		lines.append(IMPL_END)
+
 	lines.append("")
 
-	# 書き込み（ソースが変わっている場合のみ）
+	# 書き込み
 	var new_source := "\n".join(lines)
 	if source != new_source:
 		var fw := FileAccess.open(path, FileAccess.WRITE)
 		fw.store_string(new_source)
 		fw.close()
-		print("[Interface] Updated implements for: ", path.get_file())
+		print("[Interface] Injected missing boilerplate for: ", path.get_file())
