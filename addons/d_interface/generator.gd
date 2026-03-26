@@ -226,19 +226,22 @@ static func update_implements_boilerplate(path: String) -> void:
 	const LIST_START = "# --- INTERFACE LIST (AUTO-GENERATED) ---"
 	const IMPL_START = "# --- INTERFACE IMPLEMENTER (AUTO-GENERATED) ---"
 	const IMPL_END = "# --- END INTERFACE IMPLEMENTER ---"
+	const VAR_START = "# --- INTERFACE VARIABLES (STUBS) ---"
+	const VAR_END = "# --- END INTERFACE VARIABLES ---"
 	const STUB_START = "# --- INTERFACE METHODS (STUBS) ---"
 	const STUB_END = "# --- END INTERFACE METHODS ---"
 
 	# すでにブロックが存在するかチェック
 	var has_list_block := source.contains(LIST_START)
 	var has_impl_block := source.contains(IMPL_START)
+	var has_var_block := source.contains(VAR_START)
 	var has_stub_block := source.contains(STUB_START)
 	var has_manual_impl := (
 		source.contains("func get_implementer") or source.contains("func set_implementer")
 	)
 
-	# すべて揃っているなら何もしない
-	if has_list_block and (has_impl_block or has_manual_impl) and has_stub_block:
+	# 全て揃っているなら終了
+	if has_list_block and (has_impl_block or has_manual_impl) and has_var_block and has_stub_block:
 		return
 
 	# 末尾の空行を掃除
@@ -261,32 +264,54 @@ static func update_implements_boilerplate(path: String) -> void:
 		lines.append("	return self")
 		lines.append(IMPL_END)
 
+	# 共通の定義抽出処理
+	var all_defs: Array[Dictionary] = []
+	for ifc_name in ifc_names:
+		var ifc_path := _find_ifc_path_by_name(ifc_name)
+		if ifc_path.is_empty():
+			continue
+		var ifc_file := FileAccess.open(ifc_path, FileAccess.READ)
+		all_defs.append({"name": ifc_name, "defs": _parse_single_ifc(ifc_file.get_as_text())})
+		ifc_file.close()
+
+	# VARIABLES (STUBS)ブロック
+	if not has_var_block:
+		var var_stubs: Array[String] = []
+		for item in all_defs:
+			for var_name: String in item.defs.vars:
+				var re_var_check := RegEx.new()
+				re_var_check.compile("(?m)^\\s*var\\s+" + var_name + "(\\s*[:=]|\\s*$)")
+				if re_var_check.search(source):
+					continue
+
+				var d: Dictionary = item.defs.vars[var_name]
+				var_stubs.append("\n## @interface {0}".format([item.name]))
+				var_stubs.append("var {0}: {1}".format([var_name, d.type]))
+
+		if not var_stubs.is_empty():
+			lines.append("\n" + VAR_START)
+			lines.append_array(var_stubs)
+			lines.append(VAR_END)
+
 	# METHODS (STUBS)ブロック
 	if not has_stub_block:
-		var stubs: Array[String] = []
-		for ifc_name in ifc_names:
-			var ifc_path := _find_ifc_path_by_name(ifc_name)
-			if ifc_path.is_empty():
-				continue
-
-			var ifc_file := FileAccess.open(ifc_path, FileAccess.READ)
-			var defs := _parse_single_ifc(ifc_file.get_as_text())
-			ifc_file.close()
-
-			for func_name in defs.funcs:
+		var func_stubs: Array[String] = []
+		for item in all_defs:
+			for func_name: String in item.defs.funcs:
 				var re_func_check := RegEx.new()
 				# 行頭(または空白後)に func があり、コメントアウトされていないことを確認
 				re_func_check.compile("(?m)^\\s*func\\s+" + func_name + "\\s*\\(")
 				if re_func_check.search(source):
 					continue
-				var d = defs.funcs[func_name]
-				stubs.append("\n## @interface {0}".format([ifc_name]))
-				stubs.append("func {0}({1}) -> {2}:".format([func_name, d.args, d.ret]))
-				stubs.append("    pass # TODO: Implement")
 
-		if not stubs.is_empty():
+				var d: Dictionary = item.defs.funcs[func_name]
+				func_stubs.append("\n## @interface {0}".format([item.name]))
+				func_stubs.append("func {0}({1}) -> {2}:".format([func_name, d.args, d.ret]))
+				func_stubs.append("	pass # TODO: Implement")
+
+		if not func_stubs.is_empty():
 			lines.append("\n" + STUB_START)
-			lines.append_array(stubs)
+			lines.append_array(func_stubs)
 			lines.append(STUB_END)
 
 	lines.append("")
