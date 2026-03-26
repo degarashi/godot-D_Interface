@@ -64,17 +64,17 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 
 		# 戻り値が void かどうかで return の有無を切り替える
 		if data.ret == "void":
-			lines.append("    _impl.{0}({1})".format([func_name, _extract_arg_names(data.args)]))
+			lines.append("	_impl.{0}({1})".format([func_name, _extract_arg_names(data.args)]))
 		else:
 			lines.append(
-				"    return _impl.{0}({1})".format([func_name, _extract_arg_names(data.args)])
+				"	return _impl.{0}({1})".format([func_name, _extract_arg_names(data.args)])
 			)
 		lines.append("")
 
 	# --- 補助関数の追加 ---
 	var class_name_str := _format_class_name(class_hint)
 	lines.append("static func cast(obj: Object) -> {0}:".format([class_name_str]))
-	lines.append("    return Interface.as_interface(obj, {0}) as {0}".format([class_name_str]))
+	lines.append("	return Interface.as_interface(obj, {0}) as {0}".format([class_name_str]))
 	lines.append("")
 
 	return "\n".join(lines)
