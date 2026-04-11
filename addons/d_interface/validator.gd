@@ -44,7 +44,11 @@ static func _validate_method(
 	var expected_arg_count: int = expected_method.args.size()
 	var actual_arg_count: int = actual_method.args.size()
 	if expected_arg_count != actual_arg_count:
-		err.append(ERROR.ErrorDifferMethodArgumentNum.new(expected_arg_count, actual_arg_count))
+		err.append(
+			ERROR.ErrorDifferMethodArgumentNum.new(
+				expected_method.name, expected_arg_count, actual_arg_count
+			)
+		)
 	else:
 		# 各引数のプロパティ（名前、型）を比較
 		for i in range(expected_arg_count):
@@ -68,7 +72,9 @@ static func _validate_method(
 			# 引数型の比較: 期待側が Variant(TYPE_NIL) でない場合のみ厳密にチェック
 			if arg_expected.type != TYPE_NIL and arg_expected.type != arg_actual.type:
 				err.append(
-					ERROR.ErrorInvalidMethodArgumentType.new(arg_expected.type, arg_actual.type)
+					ERROR.ErrorInvalidMethodArgumentType.new(
+						expected_method.name, i, arg_expected.type, arg_actual.type
+					)
 				)
 
 	if not skip_default_arg:
@@ -163,7 +169,9 @@ static func validate_signal(res: CHECK_RESULT, target: Object, interface_type: S
 		if expected_arg_count != actual_arg_count:
 			res.add_error(
 				interface_type,
-				ERROR.ErrorDifferSignalArgumentNum.new(expected_arg_count, actual_arg_count)
+				ERROR.ErrorDifferSignalArgumentNum.new(
+					expected_signal.name, expected_arg_count, actual_arg_count
+				)
 			)
 		else:
 			for i in range(expected_arg_count):
@@ -184,7 +192,9 @@ static func validate_signal(res: CHECK_RESULT, target: Object, interface_type: S
 				if arg_expected.type != arg_actual.type:
 					res.add_error(
 						interface_type,
-						ERROR.ErrorInvalidSignalArgumentType.new(arg_expected.type, arg_actual.type)
+						ERROR.ErrorInvalidSignalArgumentType.new(
+							expected_signal.name, i, arg_expected.type, arg_actual.type
+						)
 					)
 
 		# 戻り値型（シグナルの場合は通常 void だが、辞書にあれば比較）

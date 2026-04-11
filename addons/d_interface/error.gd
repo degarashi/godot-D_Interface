@@ -13,20 +13,26 @@
 
 @abstract class ErrorDifferArgumentNum:
 	extends Error
+	var owner_name: String
 	var expect: int
 	var actual: int
 
-	func _init(expect: int, actual: int) -> void:
+	func _init(owner_name: String, expect: int, actual: int) -> void:
+		self.owner_name = owner_name
 		self.expect = expect
 		self.actual = actual
 
 
 @abstract class ErrorInvalidArgumentType:
 	extends Error
+	var owner_name: String
+	var index: int
 	var expect_id: int
 	var actual_id: int
 
-	func _init(expect_id: int = -1, actual_id: int = -1) -> void:
+	func _init(owner_name: String, index: int, expect_id: int = -1, actual_id: int = -1) -> void:
+		self.owner_name = owner_name
+		self.index = index
 		self.expect_id = expect_id
 		self.actual_id = actual_id
 
@@ -49,14 +55,20 @@ class ErrorDifferMethodArgumentNum:
 	extends ErrorDifferArgumentNum
 
 	func as_string() -> String:
-		return "Method argument count mismatch: expected=%d, actual=%d" % [expect, actual]
+		return (
+			"Method '%s' argument count mismatch: expected=%d, actual=%d"
+			% [owner_name, expect, actual]
+		)
 
 
 class ErrorDifferSignalArgumentNum:
 	extends ErrorDifferArgumentNum
 
 	func as_string() -> String:
-		return "Signal argument count mismatch: expected=%d, actual=%d" % [expect, actual]
+		return (
+			"Signal '%s' argument count mismatch: expected=%d, actual=%d"
+			% [owner_name, expect, actual]
+		)
 
 
 # ---------- [Invalid argument type] ----------
@@ -66,7 +78,10 @@ class ErrorInvalidMethodArgumentType:
 	func as_string() -> String:
 		var expect_str := _type_id_to_string(expect_id)
 		var actual_str := _type_id_to_string(actual_id)
-		return "Invalid method argument type: expected=%s, actual=%s" % [expect_str, actual_str]
+		return (
+			"Method '%s' arg[%d] invalid type: expected=%s, actual=%s"
+			% [owner_name, index, expect_str, actual_str]
+		)
 
 
 class ErrorInvalidSignalArgumentType:
@@ -75,7 +90,10 @@ class ErrorInvalidSignalArgumentType:
 	func as_string() -> String:
 		var expect_str := _type_id_to_string(expect_id)
 		var actual_str := _type_id_to_string(actual_id)
-		return "Invalid signal argument type: expected=%s, actual=%s" % [expect_str, actual_str]
+		return (
+			"Signal '%s' arg[%d] invalid type: expected=%s, actual=%s"
+			% [owner_name, index, expect_str, actual_str]
+		)
 
 
 # ---------- [Not founds] ----------
