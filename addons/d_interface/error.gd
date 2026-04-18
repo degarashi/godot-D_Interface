@@ -272,3 +272,14 @@ class ErrorImplementsMarkerMismatch:
 			"Implements marker mismatch: # implements [%s] vs implements_list() returns [%s]"
 			% [", ".join(expected_markers), ", ".join(actual_scripts)]
 		)
+
+
+class ErrorDuplicateImplements:
+	extends Error
+	var duplicate_script_name: String
+
+	func _init(script_name: String) -> void:
+		self.duplicate_script_name = script_name
+
+	func as_string() -> String:
+		return "Duplicate implementation found in implements_list(): '%s'" % duplicate_script_name

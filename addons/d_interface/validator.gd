@@ -341,6 +341,19 @@ static func validate_implements_marker(res: CHECK_RESULT, scr: Script) -> void:
 	if scr.has_method(IMPL_LIST_NAME):
 		actual_scripts = scr.call(IMPL_LIST_NAME)
 
+	# 重複チェック
+	var seen: Dictionary = {}
+	for s in actual_scripts:
+		if not s is Script:
+			continue
+		if s in seen:
+			var s_name: String = s.get_global_name()
+			if s_name == "":
+				s_name = s.resource_path.get_file().get_basename()
+			res.add_error(scr, ERROR.ErrorDuplicateImplements.new(s_name))
+		else:
+			seen[s] = true
+
 	# 親の implements_list
 	var parent_scripts: Array[Script] = []
 	var base := scr.get_base_script()
