@@ -5,6 +5,7 @@ const CHECK_RESULT = preload("uid://ck862o06krlja")
 const C = preload("uid://beur775onkfdv")
 const CACHE = preload("uid://bgl5faa3wfm4d")
 const ERROR = preload("uid://c4n13cyd88clu")
+const IMPL_LIST_NAME = &"implements_list"
 
 
 # ------------- [Private Static Method] -------------
@@ -336,18 +337,18 @@ static func validate_implements_marker(res: CHECK_RESULT, scr: Script) -> void:
 	marker_names.sort()
 
 	# 自身の implements_list
-	var actual_scripts: Array = []
-	if scr.has_method(&"implements_list"):
-		actual_scripts = scr.call(&"implements_list")
+	var actual_scripts: Array[Script] = []
+	if scr.has_method(IMPL_LIST_NAME):
+		actual_scripts = scr.call(IMPL_LIST_NAME)
 
 	# 親の implements_list
-	var parent_scripts: Array = []
+	var parent_scripts: Array[Script] = []
 	var base := scr.get_base_script()
-	if base and base.has_method(&"implements_list"):
-		parent_scripts = base.call(&"implements_list")
+	if base and base.has_method(IMPL_LIST_NAME):
+		parent_scripts = base.call(IMPL_LIST_NAME)
 
 	# 親には含まれない、このクラス固有の実装スクリプトを抽出
-	var new_scripts: Array = []
+	var new_scripts: Array[Script] = []
 	for s in actual_scripts:
 		if not s in parent_scripts:
 			new_scripts.append(s)
