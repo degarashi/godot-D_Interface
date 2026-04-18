@@ -312,6 +312,9 @@ static func _check_interface_define(scr: Script) -> CHECK_RESULT:
 		print("Error: Script is null.")
 		return res
 
+	# マーカーとメソッドの整合性チェックは、インスタンス化の可否に関わらず行う
+	VALIDATOR.validate_implements_marker(res, scr)
+
 	# エンジン由来クラス継承したスクリプトなどは can_instantiate()がfalse になる場合があるため
 	# 直接new()が可能か、あるいは特定のベースクラスを持っているかを確認する
 	var can_create := scr.can_instantiate()

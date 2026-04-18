@@ -256,3 +256,19 @@ class ErrorMethodDefaultArgValueMismatch:
 			"Method '%s' default arg[%d] value differs: expected=%s, actual=%s"
 			% [method_name, index, str(expect_val), str(actual_val)]
 		)
+
+
+class ErrorImplementsMarkerMismatch:
+	extends Error
+	var expected_markers: Array[String]
+	var actual_scripts: Array[String]
+
+	func _init(expected: Array[String], actual: Array[String]) -> void:
+		self.expected_markers = expected
+		self.actual_scripts = actual
+
+	func as_string() -> String:
+		return (
+			"Implements marker mismatch: # implements [%s] vs implements_list() returns [%s]"
+			% [", ".join(expected_markers), ", ".join(actual_scripts)]
+		)

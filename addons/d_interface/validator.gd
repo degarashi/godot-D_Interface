@@ -308,3 +308,59 @@ static func _is_custom_class_parent(actual: StringName, expected: StringName) ->
 			break
 
 	return false
+
+
+## インタフェース実装マーカー (# implements) と implements_list() の整合性を検証
+## @param res 検証結果
+## @param scr 検証対象のスクリプト
+static func validate_implements_marker(res: CHECK_RESULT, scr: Script) -> void:
+	if scr.resource_path.is_empty():
+		return
+
+	var file := FileAccess.open(scr.resource_path, FileAccess.READ)
+	if not file:
+		return
+	var source := file.get_as_text()
+	file.close()
+
+	var re_marker := RegEx.new()
+	re_marker.compile("(?m)^#\\s*implements\\s+(?<names>[\\w\\s,]+?)(?=\\r?$|\\n|$)")
+	var m := re_marker.search(source)
+
+	var marker_names: Array[String] = []
+	if m:
+		for name in m.get_string("names").split(","):
+			var n := name.strip_edges()
+			if not n.is_empty():
+				marker_names.append(n)
+	marker_names.sort()
+
+	# 自身の implements_list
+	var actual_scripts: Array = []
+	if scr.has_method(&"implements_list"):
+		actual_scripts = scr.call(&"implements_list")
+
+	# 親の implements_list
+	var parent_scripts: Array = []
+	var base := scr.get_base_script()
+	if base and base.has_method(&"implements_list"):
+		parent_scripts = base.call(&"implements_list")
+
+	# 親には含まれない、このクラス固有の実装スクリプトを抽出
+	var new_scripts: Array = []
+	for s in actual_scripts:
+		if not s in parent_scripts:
+			new_scripts.append(s)
+
+	var new_script_names: Array[String] = []
+	for s in new_scripts:
+		if s is Script:
+			var s_name: String = s.get_global_name()
+			if s_name == "":
+				s_name = s.resource_path.get_file().get_basename()
+			new_script_names.append(String(s_name))
+
+	new_script_names.sort()
+
+	if marker_names != new_script_names:
+		res.add_error(scr, ERROR.ErrorImplementsMarkerMismatch.new(marker_names, new_script_names))
