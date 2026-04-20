@@ -54,18 +54,18 @@ class ScriptEnt:
 	func _update(scr: Script) -> void:
 		method_a = _prepare_base(
 			scr,
-			func(scr: Script): return scr.get_script_method_list(),
+			func(scr2: Script): return scr2.get_script_method_list(),
 			func(m: Dictionary):
 				return not (m.name.begins_with("@") or (m.flags & METHOD_FLAG_STATIC)),
 		)
 		property_a = _prepare_base(
 			scr,
-			func(scr: Script): return scr.get_script_property_list(),
+			func(scr2: Script): return scr2.get_script_property_list(),
 			func(p: Dictionary): return not p.name.ends_with(".gd"),
 		)
 		signal_a = _prepare_base(
 			scr,
-			func(scr: Script): return scr.get_script_signal_list(),
+			func(scr2: Script): return scr2.get_script_signal_list(),
 		)
 
 	func check_update(scr: Script) -> void:
