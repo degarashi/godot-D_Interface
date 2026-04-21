@@ -65,12 +65,20 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 		_append_comments(lines, data)
 		lines.append("func {0}({1}) -> {2}:".format([func_name, data.args, data.ret]))
 
+		var await_prefix := "await " if data.get("is_await", false) else ""
+
 		# 戻り値が void かどうかで return の有無を切り替える
 		if data.ret == "void":
-			lines.append("	_impl.{0}({1})".format([func_name, _extract_arg_names(data.args)]))
+			lines.append(
+				"	{0}_impl.{1}({2})".format(
+					[await_prefix, func_name, _extract_arg_names(data.args)]
+				)
+			)
 		else:
 			lines.append(
-				"	return _impl.{0}({1})".format([func_name, _extract_arg_names(data.args)])
+				"	return {0}_impl.{1}({2})".format(
+					[await_prefix, func_name, _extract_arg_names(data.args)]
+				)
 			)
 		lines.append("")
 
@@ -136,7 +144,9 @@ static func _parse_single_ifc(source_text: String) -> Dictionary[String, Diction
 		defs.enums[name] = values
 
 	var re_func := RegEx.new()
-	re_func.compile("func\\s+(?<name>\\w+)\\s*\\((?<args>.*)\\)\\s*(->\\s*(?<ret>[\\w.]+))?")
+	re_func.compile(
+		"(?<await>await\\s+)?func\\s+(?<name>\\w+)\\s*\\((?<args>.*)\\)\\s*(->\\s*(?<ret>[\\w.]+))?"
+	)
 
 	var re_var := RegEx.new()
 	re_var.compile("var\\s+(?<name>\\w+)\\s*:\\s*(?<type>[\\w.]+)")
@@ -174,6 +184,7 @@ static func _parse_single_ifc(source_text: String) -> Dictionary[String, Diction
 			defs.funcs[m_func.get_string("name")] = {
 				"args": m_func.get_string("args"),
 				"ret": ret if not ret.is_empty() else "void",
+				"is_await": not m_func.get_string("await").is_empty(),
 				"comment": comment_buffer.duplicate()
 			}
 			comment_buffer.clear()
@@ -315,6 +326,8 @@ static func update_implements_boilerplate(path: String) -> void:
 
 				var d: Dictionary = item.defs.funcs[func_name]
 				func_stubs.append("\n## @interface {0}".format([item.name]))
+				if d.get("is_await", false):
+					func_stubs.append("## @await")
 				func_stubs.append("func {0}({1}) -> {2}:".format([func_name, d.args, d.ret]))
 				func_stubs.append("	pass # TODO: Implement")
 
