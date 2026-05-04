@@ -91,6 +91,14 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 			)
 		lines.append("")
 
+	# --- 信号の転送設定 ---
+	if not my_defs.signals.is_empty():
+		lines.append("func _on_setup_interface() -> void:")
+		for sig_name: String in my_defs.signals:
+			lines.append("	if _impl.has_signal(\"{0}\"):".format([sig_name]))
+			lines.append("		_impl.connect(\"{0}\", func(&1): {0}.emit(&1))".format([sig_name]).replace("&1", _extract_arg_names(my_defs.signals[sig_name].args)))
+		lines.append("")
+
 	# --- 補助関数の追加 ---
 	lines.append("static func cast(obj: Object) -> {0}:".format([class_name_str]))
 	lines.append("	return Interface.as_interface(obj, {0}) as {0}".format([class_name_str]))
