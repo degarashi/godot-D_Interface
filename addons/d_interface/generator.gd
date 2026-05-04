@@ -55,8 +55,16 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 		var data: Dictionary = my_defs.vars[var_name]
 		_append_comments(lines, data)
 		lines.append("var {0}: {1}:".format([var_name, data.type]))
-		lines.append("	set(v): _impl.{0} = v".format([var_name]))
-		lines.append("	get: return _impl.{0}".format([var_name]))
+		lines.append(
+			"	set(v): assert(is_valid(), \"[Interface] Accessing freed instance\"); _impl.{0} = v".format(
+				[var_name]
+			)
+		)
+		lines.append(
+			"	get: assert(is_valid(), \"[Interface] Accessing freed instance\"); return _impl.{0}".format(
+				[var_name]
+			)
+		)
 		lines.append("")
 
 	# メソッドの書き出し
@@ -64,6 +72,7 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 		var data = my_defs.funcs[func_name]
 		_append_comments(lines, data)
 		lines.append("func {0}({1}) -> {2}:".format([func_name, data.args, data.ret]))
+		lines.append('	assert(is_valid(), "[Interface] Accessing freed instance")')
 
 		var await_prefix := "await " if data.get("is_await", false) else ""
 
