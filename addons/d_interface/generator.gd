@@ -21,6 +21,12 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 	lines.append("# Generated at: {0}".format([current_time]))
 	lines.append("")
 
+	# インターフェース自体のコメント
+	if not my_defs.interface_comment.is_empty():
+		for c in my_defs.interface_comment:
+			lines.append(c)
+		lines.append("")
+
 	# class_name の生成 (i_mover -> IMover)
 	var class_name_str := _format_class_name(class_hint)
 	if not class_hint.is_empty():
@@ -147,9 +153,12 @@ static func _extract_parent_info(text: String) -> Dictionary[String, String]:
 
 
 ## @brief その .ifc ファイル自身の定義のみを解析する
-static func _parse_single_ifc(source_text: String) -> Dictionary[String, Dictionary]:
-	var defs: Dictionary[String, Dictionary] = {"funcs": {}, "vars": {}, "signals": {}, "enums": {}}
+static func _parse_single_ifc(source_text: String) -> Dictionary:
+	var defs: Dictionary = {
+		"funcs": {}, "vars": {}, "signals": {}, "enums": {}, "interface_comment": []
+	}
 	var comment_buffer: Array[String] = []
+	var is_first_def := true
 
 	# 複数行Enumの解析
 	var re_enum_block := RegEx.new()
@@ -171,6 +180,12 @@ static func _parse_single_ifc(source_text: String) -> Dictionary[String, Diction
 	var re_sig := RegEx.new()
 	re_sig.compile("signal\\s+(?<name>\\w+)\\s*(\\((?<args>.*)\\))?")
 
+	var re_enum_line := RegEx.new()
+	re_enum_line.compile("^enum\\s+")
+
+	var re_extends := RegEx.new()
+	re_extends.compile("^extends\\s+")
+
 	# Enum以外の定義を行単位で解析
 	for raw_line: String in source_text.split("\n"):
 		var line := raw_line.strip_edges()
@@ -182,12 +197,29 @@ static func _parse_single_ifc(source_text: String) -> Dictionary[String, Diction
 
 		# 定義に直結しない行（空行や通常コメント）があればバッファを捨てる
 		if line.is_empty() or (line.begins_with("#") and not line.begins_with("##")):
+			if is_first_def and not comment_buffer.is_empty():
+				defs.interface_comment.append_array(comment_buffer)
+			comment_buffer.clear()
+			continue
+
+		# Extends行の検出
+		if re_extends.search(line):
+			if is_first_def and not comment_buffer.is_empty():
+				defs.interface_comment.append_array(comment_buffer)
+			is_first_def = false
+			comment_buffer.clear()
+			continue
+
+		# Enum行の検出 (コメントのリーク防止のため)
+		if re_enum_line.search(line):
+			is_first_def = false
 			comment_buffer.clear()
 			continue
 
 		# Signal
 		var m_sig := re_sig.search(line)
 		if m_sig:
+			is_first_def = false
 			defs.signals[m_sig.get_string("name")] = {
 				"args": m_sig.get_string("args"), "comment": comment_buffer.duplicate()
 			}
@@ -197,6 +229,7 @@ static func _parse_single_ifc(source_text: String) -> Dictionary[String, Diction
 		# Function
 		var m_func := re_func.search(line)
 		if m_func:
+			is_first_def = false
 			var ret := m_func.get_string("ret")
 			defs.funcs[m_func.get_string("name")] = {
 				"args": m_func.get_string("args"),
@@ -210,6 +243,7 @@ static func _parse_single_ifc(source_text: String) -> Dictionary[String, Diction
 		# Variable
 		var m_var := re_var.search(line)
 		if m_var:
+			is_first_def = false
 			defs.vars[m_var.get_string("name")] = {
 				"type": m_var.get_string("type"), "comment": comment_buffer.duplicate()
 			}
