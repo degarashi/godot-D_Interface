@@ -212,6 +212,8 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 
 		# Enum行の検出 (コメントのリーク防止のため)
 		if re_enum_line.search(line):
+			if is_first_def and not comment_buffer.is_empty():
+				defs.interface_comment.append_array(comment_buffer)
 			is_first_def = false
 			comment_buffer.clear()
 			continue
@@ -249,6 +251,16 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 			}
 			comment_buffer.clear()
 			continue
+
+		# 未知の行であっても、空行でないならインターフェース区間終了として回収
+		if is_first_def and not comment_buffer.is_empty():
+			defs.interface_comment.append_array(comment_buffer)
+		is_first_def = false
+		comment_buffer.clear()
+
+	# ファイル末尾まで一度も定義が現れなかった場合、残ったバッファを回収
+	if is_first_def and not comment_buffer.is_empty():
+		defs.interface_comment.append_array(comment_buffer)
 
 	return defs
 
