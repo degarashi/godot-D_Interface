@@ -7,16 +7,19 @@ DInterface は、GDScript にインターフェースの仕組みを導入する
 
 ## 特徴
 
-- **.ifc による定義**: 専用の定義ファイル（`.ifc`）でインターフェースを宣言できる。
+- **.ifc による定義**: 専用の定義ファイル（`.ifc`）でインターフェースを宣言できる。`extends` によるインターフェースの継承をサポート。
 - **ブリッジスクリプトの自動生成**: 定義ファイルから、インターフェースをラップして呼び出すための GDScript を自動で生成する。
-- **ボイラープレートの自動注入**: `# implements` マーカーを使用することで、実装用のスタブやボイラープレートを GDScript に自動挿入する。
+- **ボイラープレートの自動注入**: `# implements` マーカーを使用することで、実装用のスタブやボイラープレートを GDScript に自動挿入する。専用のブロック内で管理されるため、ユーザーコードを上書きしにくい。
 - **ドキュメントコメントの継承**: `.ifc` ファイル内の `##` で始まるドキュメントコメントを生成スクリプトに引き継ぐ。
 - **強力な検証機能**:
-    - メソッドの引数の数、型、戻り値の型の不一致を検出。
+    - メソッドの引数の数、型、戻り値の型の不一致を検出（`await` メソッドに対応）。
     - プロパティの型一致を検証。
     - シグナルの引数構成を検証。
     - エンジンクラスおよびカスタムクラス（`class_name`）の継承関係を考慮した型チェック。
-- **キャスト機能**: `IInterface.cast(object)` または `IInterface.cast_checked(object)` のような形式で、オブジェクトをインターフェース型にラップできる。
+- **キャストと安全な実行**: 
+    - `IInterface.cast(object)` または `IInterface.cast_checked(object)` のような形式で、オブジェクトをインターフェース型にラップできる。
+    - `Interface.proc_interface(object, IInterface, callback)` による安全な実行。
+- **コンポジション（合成）**: `InterfaceWrap` による複数オブジェクトの統合実装や、`get_implementer` による実装の委譲をサポート。
 - **外部エディタ連携**: 定義ファイルの編集に使い慣れた外部エディタ（VSCode, Neovim 等）を使用可能。
 
 ## 使い方
@@ -24,7 +27,7 @@ DInterface は、GDScript にインターフェースの仕組みを導入する
 ### 1. インターフェースの定義
 
 `.ifc` ファイルを作成し、インターフェースを定義する。
-文法は GDScript に似ており、プロパティ、メソッド、シグナル、列挙型（enum）を定義できる。
+文法は GDScript に似ており、プロパティ、メソッド（`await` 対応）、シグナル、列挙型（enum）を定義できる。他の `.ifc` ファイルを継承することも可能。
 
 ```gdscript
 # i_mover.ifc
@@ -38,6 +41,12 @@ signal moved(position: Vector2)
 ## デルタ時間分だけオブジェクトを移動させる。
 func move(delta: float) -> void
 func get_type() -> MoveType
+
+# i_advanced_mover.ifc
+extends "res://path/to/i_mover.ifc"
+
+## ダッシュを実行する。
+await func dash() -> void
 ```
 
 ファイルを保存すると、プラグインが `IMover` という `class_name` を持つ `i_mover.gd` を自動生成する。
@@ -45,7 +54,7 @@ func get_type() -> MoveType
 ### 2. インターフェースの実装
 
 #### 方法A：自動注入（推奨）
-スクリプトの冒頭に `# implements <InterfaceName>` というコメントを記述する。保存またはリロード時に、必要なボイラープレートが自動的に挿入される。
+スクリプトの冒頭に `# implements <InterfaceName>` というコメントを記述する。保存またはリロード時に、必要なボイラープレートが専用のブロックとして自動的に挿入される。
 
 ```gdscript
 # player.gd
@@ -53,6 +62,8 @@ extends CharacterBody2D
 
 # implements IMover
 ```
+
+プラグインは `# --- INTERFACE LIST (AUTO-GENERATED) ---` や `# --- INTERFACE METHODS (STUBS) ---` といったブロックを生成する。ユーザーはこれらのスタブ内にロジックを実装する。
 
 #### 方法B：手動実装
 任意のスクリプトで、インターフェースが定義しているメンバを実装する。
@@ -71,7 +82,7 @@ signal moved(position: Vector2)
 
 func move(delta: float) -> void:
     # 移動処理
-    emit_signal("moved", global_position)
+    moved.emit(global_position)
 
 func get_type() -> int:
     return IMover.MoveType.WALK
@@ -92,10 +103,16 @@ func do_something(target: Object):
     # 実装していることを前提とし、失敗時にアサートする
     var forced_mover = IMover.cast_checked(target)
     forced_mover.move(0.1)
+
+    # 安全な呼び出し：実装されている場合のみ実行される
+    Interface.proc_interface(target, IMover, func(m: IMover):
+        m.move(0.1)
+    )
 ```
 
-## 応用：実装の委譲（Delegation）
+## 応用
 
+### 実装の委譲（Delegation）
 オブジェクト自身ではなく、保持している別のオブジェクトに実装を委譲したい場合は、`get_implementer(interface_script: Script) -> Object` メソッドを実装する。
 
 ```gdscript
@@ -103,6 +120,16 @@ func get_implementer(t_if: Script) -> Object:
     if t_if == IMover:
         return $MoverComponent
     return self
+```
+
+### 複数オブジェクトの合成（InterfaceWrap）
+`InterfaceWrap` を使用すると、複数のオブジェクトを一つの実装体としてラップできる。要求されたインターフェースを実装している最初のオブジェクトへ処理が委譲される。
+
+```gdscript
+var combined = InterfaceWrap.new([$MoverComponent, $CombatComponent])
+var mover = IMover.cast(combined)
+if mover:
+    mover.move(0.1)
 ```
 
 ## エディタ設定

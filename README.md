@@ -7,16 +7,19 @@ It automatically generates bridge scripts from custom definition files with the 
 
 ## Features
 
-- **Definition via .ifc**: Declare interfaces in dedicated definition files (`.ifc`).
+- **Definition via .ifc**: Declare interfaces in dedicated definition files (`.ifc`). Supports interface inheritance using `extends`.
 - **Automatic Bridge Script Generation**: Automatically generates GDScript from definition files to wrap and call interfaces.
-- **Automatic Boilerplate Injection**: Automatically injects implementation stubs and boilerplate into GDScripts using the `# implements` marker.
+- **Automatic Boilerplate Injection**: Automatically injects implementation stubs and boilerplate into GDScripts using the `# implements` marker. Manages code in dedicated blocks to prevent overwriting user logic.
 - **Documentation Support**: Documentation comments (`##`) in `.ifc` files are preserved in the generated scripts.
 - **Powerful Validation**:
-    - Detects mismatches in method argument count, types, and return types.
+    - Detects mismatches in method argument count, types, and return types (supporting `await` methods).
     - Validates property type matches.
     - Validates signal argument configurations.
     - Type checking considering inheritance relationships of engine classes and custom classes (`class_name`).
-- **Casting Feature**: Wrap objects into interface types using `IInterface.cast(object)` or `IInterface.cast_checked(object)`.
+- **Casting & Safe Execution**: 
+    - Wrap objects into interface types using `IInterface.cast(object)` or `IInterface.cast_checked(object)`.
+    - Safe execution with `Interface.proc_interface(object, IInterface, callback)`.
+- **Composition**: Support for multi-object implementation via `InterfaceWrap` and delegation via `get_implementer`.
 - **External Editor Integration**: Use your favorite external editors (VSCode, Neovim, etc.) to edit definition files.
 
 ## Usage
@@ -24,7 +27,7 @@ It automatically generates bridge scripts from custom definition files with the 
 ### 1. Defining an Interface
 
 Create an `.ifc` file and define the interface.
-The syntax is similar to GDScript, allowing you to define properties, methods, signals, and enums.
+The syntax is similar to GDScript, allowing you to define properties, methods (including `await`), signals, and enums. It also supports inheriting from other `.ifc` files.
 
 ```gdscript
 # i_mover.ifc
@@ -38,6 +41,12 @@ signal moved(position: Vector2)
 ## Moves the object by delta.
 func move(delta: float) -> void
 func get_type() -> MoveType
+
+# i_advanced_mover.ifc
+extends "res://path/to/i_mover.ifc"
+
+## Performs a dash.
+await func dash() -> void
 ```
 
 When you save the file, the plugin automatically generates `i_mover.gd` with the `class_name` `IMover`.
@@ -45,7 +54,7 @@ When you save the file, the plugin automatically generates `i_mover.gd` with the
 ### 2. Implementing the Interface
 
 #### Method A: Automatic Injection (Recommended)
-Add a comment `# implements <InterfaceName>` at the top of your script. When you save or reload, the plugin will automatically inject the necessary boilerplate.
+Add a comment `# implements <InterfaceName>` at the top of your script. When you save or reload, the plugin will automatically inject the necessary boilerplate into specific blocks.
 
 ```gdscript
 # player.gd
@@ -53,6 +62,8 @@ extends CharacterBody2D
 
 # implements IMover
 ```
+
+The plugin will generate blocks like `# --- INTERFACE LIST (AUTO-GENERATED) ---`, `# --- INTERFACE VARIABLES (STUBS) ---`, and `# --- INTERFACE METHODS (STUBS) ---`. You should implement your logic inside these stubs.
 
 #### Method B: Manual Implementation
 Implement the members defined by the interface in any script.
@@ -71,7 +82,7 @@ signal moved(position: Vector2)
 
 func move(delta: float) -> void:
     # Movement logic
-    emit_signal("moved", global_position)
+    moved.emit(global_position)
 
 func get_type() -> int:
     return IMover.MoveType.WALK
@@ -92,10 +103,16 @@ func do_something(target: Object):
     # Asserts that the object implements the interface
     var forced_mover = IMover.cast_checked(target)
     forced_mover.move(0.1)
+
+    # Safe call: only executes if the interface is implemented
+    Interface.proc_interface(target, IMover, func(m: IMover):
+        m.move(0.1)
+    )
 ```
 
-## Advanced: Implementation Delegation
+## Advanced
 
+### Implementation Delegation
 If you want to delegate the implementation to another object instead of the object itself, implement the `get_implementer(interface_script: Script) -> Object` method.
 
 ```gdscript
@@ -103,6 +120,16 @@ func get_implementer(t_if: Script) -> Object:
     if t_if == IMover:
         return $MoverComponent
     return self
+```
+
+### Multi-Object Composition (InterfaceWrap)
+You can wrap multiple objects as a single implementer using `InterfaceWrap`. It will delegate interface calls to the first object that implements the requested interface.
+
+```gdscript
+var combined = InterfaceWrap.new([$MoverComponent, $CombatComponent])
+var mover = IMover.cast(combined)
+if mover:
+    mover.move(0.1)
 ```
 
 ## Editor Settings
