@@ -41,8 +41,9 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 
 	# Enumの書き出し
 	for enum_name: String in my_defs.enums:
-		var values: String = my_defs.enums[enum_name]
-		lines.append("enum {0} { {1} }".format([enum_name, values]))
+		var data: Dictionary = my_defs.enums[enum_name]
+		_append_comments(lines, data)
+		lines.append("enum {0} { {1} }".format([enum_name, data.values]))
 
 	if not my_defs.enums.is_empty():
 		lines.append("")
@@ -167,7 +168,7 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 	for m: RegExMatch in enum_matches:
 		var name := m.get_string("name")
 		var values := m.get_string("values").strip_edges().replace("\n", " ")
-		defs.enums[name] = values
+		defs.enums[name] = {"values": values, "comment": []}
 
 	var re_func := RegEx.new()
 	re_func.compile(
@@ -181,7 +182,7 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 	re_sig.compile("signal\\s+(?<name>\\w+)\\s*(\\((?<args>.*)\\))?")
 
 	var re_enum_line := RegEx.new()
-	re_enum_line.compile("^enum\\s+")
+	re_enum_line.compile("^enum\\s+(?<name>\\w+)")
 
 	var re_extends := RegEx.new()
 	re_extends.compile("^extends\\s+")
@@ -211,9 +212,16 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 			continue
 
 		# Enum行の検出 (コメントのリーク防止のため)
-		if re_enum_line.search(line):
+		var m_enum := re_enum_line.search(line)
+		if m_enum:
 			if is_first_def and not comment_buffer.is_empty():
 				defs.interface_comment.append_array(comment_buffer)
+				comment_buffer.clear()
+			
+			var ename := m_enum.get_string("name")
+			if defs.enums.has(ename):
+				defs.enums[ename].comment = comment_buffer.duplicate()
+			
 			is_first_def = false
 			comment_buffer.clear()
 			continue
