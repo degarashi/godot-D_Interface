@@ -306,6 +306,9 @@ static func update_implements_boilerplate(path: String) -> void:
 
 				var d: Dictionary = item.defs.vars[var_name]
 				var_stubs.append("\n## @interface {0}".format([item.name]))
+				if d.has("comment"):
+					for c in d.comment:
+						var_stubs.append(c)
 				var_stubs.append("var {0}: {1}".format([var_name, d.type]))
 
 		if not var_stubs.is_empty():
@@ -326,6 +329,9 @@ static func update_implements_boilerplate(path: String) -> void:
 
 				var d: Dictionary = item.defs.funcs[func_name]
 				func_stubs.append("\n## @interface {0}".format([item.name]))
+				if d.has("comment"):
+					for c in d.comment:
+						func_stubs.append(c)
 				if d.get("is_await", false):
 					func_stubs.append("## @await")
 				func_stubs.append("func {0}({1}) -> {2}:".format([func_name, d.args, d.ret]))
