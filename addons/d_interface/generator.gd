@@ -331,10 +331,25 @@ static func update_implements_boilerplate(path: String) -> void:
 	while lines.size() > 0 and lines[-1].strip_edges().is_empty():
 		lines.remove_at(lines.size() - 1)
 
+	# 共通の定義抽出処理
+	var all_defs: Array[Dictionary] = []
+	for ifc_name in ifc_names:
+		var ifc_path := _find_ifc_path_by_name(ifc_name)
+		if ifc_path.is_empty():
+			continue
+		var ifc_file := FileAccess.open(ifc_path, FileAccess.READ)
+		all_defs.append({"name": ifc_name, "defs": _parse_single_ifc(ifc_file.get_as_text())})
+		ifc_file.close()
+
 	# LISTブロック
 	if not has_list_block:
 		lines.append("")
 		lines.append(LIST_START)
+		for item in all_defs:
+			lines.append("## @interface {0}".format([item.name]))
+			if not item.defs.interface_comment.is_empty():
+				for c in item.defs.interface_comment:
+					lines.append(c)
 		lines.append("static func implements_list() -> Array[Script]:")
 		lines.append("	return [{0}]".format([", ".join(ifc_names)]))
 		lines.append("# --- END INTERFACE LIST ---")
@@ -346,16 +361,6 @@ static func update_implements_boilerplate(path: String) -> void:
 		lines.append("func get_implementer(_t: Script) -> Object:")
 		lines.append("	return self")
 		lines.append(IMPL_END)
-
-	# 共通の定義抽出処理
-	var all_defs: Array[Dictionary] = []
-	for ifc_name in ifc_names:
-		var ifc_path := _find_ifc_path_by_name(ifc_name)
-		if ifc_path.is_empty():
-			continue
-		var ifc_file := FileAccess.open(ifc_path, FileAccess.READ)
-		all_defs.append({"name": ifc_name, "defs": _parse_single_ifc(ifc_file.get_as_text())})
-		ifc_file.close()
 
 	# VARIABLES (STUBS)ブロック
 	if not has_var_block:
