@@ -70,8 +70,14 @@ static func _validate_method(
 						)
 					)
 
-			# 引数型の比較: 期待側が Variant(TYPE_NIL) でない場合のみ厳密にチェック
-			if arg_expected.type != TYPE_NIL and arg_expected.type != arg_actual.type:
+			# 引数型の比較: 期待側が Variant(TYPE_NIL) でない場合のみチェック
+			# 引数は共変性 (Covariance): 実装側は期待側と同じか、より具体的な型を許容する
+			if not _is_type_compatible(
+				arg_expected.type,
+				arg_actual.type,
+				arg_expected.get("class_name", &""),
+				arg_actual.get("class_name", &"")
+			):
 				err.append(
 					ERROR.ErrorInvalidMethodArgumentType.new(
 						expected_method.name, i, arg_expected.type, arg_actual.type
@@ -180,7 +186,13 @@ static func validate_signal(res: CHECK_RESULT, target: Object, interface_type: S
 							)
 						)
 					)
-				if arg_expected.type != arg_actual.type:
+				# 引数型の比較 (反変性)
+				if not _is_type_compatible(
+					arg_actual.type,
+					arg_expected.type,
+					arg_actual.get("class_name", &""),
+					arg_expected.get("class_name", &"")
+				):
 					res.add_error(
 						interface_type,
 						ERROR.ErrorInvalidSignalArgumentType.new(
@@ -188,11 +200,16 @@ static func validate_signal(res: CHECK_RESULT, target: Object, interface_type: S
 						)
 					)
 
-		# 戻り値型（シグナルの場合は通常 void だが、辞書にあれば比較）
+		# 戻り値型（共変性）
 		if "return" in expected_signal and "return" in actual_signal:
 			var expected_ret = expected_signal["return"]
 			var actual_ret = actual_signal["return"]
-			if expected_ret.type != actual_ret.type:
+			if not _is_type_compatible(
+				expected_ret.type,
+				actual_ret.type,
+				expected_ret.get("class_name", &""),
+				actual_ret.get("class_name", &"")
+			):
 				res.add_error(
 					interface_type,
 					ERROR.ErrorSignalReturnTypeDiffer.new(
@@ -274,17 +291,23 @@ static func _is_type_compatible(
 static func _is_custom_class_parent(actual: StringName, expected: StringName) -> bool:
 	if actual == &"" or expected == &"":
 		return false
+	if actual == expected:
+		return true
 
 	var current := actual
 	var global_classes := ProjectSettings.get_global_class_list()
 
-	# 無限ループ防止用のカウンター（念のため）
+	# 無限ループ防止用のカウンター
 	var safety_limit := 100
 
 	while current != &"" and safety_limit > 0:
 		safety_limit -= 1
-		var found := false
 
+		# 現在のクラス名がエンジン標準クラスなら、ClassDBで判定を委ねる
+		if ClassDB.class_exists(current):
+			return ClassDB.is_parent_class(current, expected)
+
+		var found := false
 		for c in global_classes:
 			if c["class"] == current:
 				var base: String = c["base"]
@@ -294,8 +317,10 @@ static func _is_custom_class_parent(actual: StringName, expected: StringName) ->
 				found = true
 				break
 
-		# global_class_list に見つからない、またはベースがなくなった
+		# global_class_list に見つからない場合
 		if not found:
+			# もしエンジン標準クラスに到達していたら上の class_exists で処理されるはずなので、
+			# ここに来るということは不明なクラス、あるいは継承関係が途切れたことを意味する
 			break
 
 	return false
