@@ -285,8 +285,9 @@ static func _extract_arg_names(args_str: String) -> String:
 		return ""
 	var names: Array[String] = []
 	for part in args_str.split(","):
-		var kv := part.split(":")
-		names.append(kv[0].strip_edges())
+		# 'name: type = val' から 'name' を抽出する
+		var name_part := part.split(":")[0].split("=")[0].strip_edges()
+		names.append(name_part)
 	return ", ".join(names)
 
 

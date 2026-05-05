@@ -101,24 +101,15 @@ static func _validate_method(
 					)
 
 	# 戻り値の比較
-	var expected_ret = expected_method.return
-	var actual_ret = actual_method.return
+	var expected_ret = expected_method["return"]
+	var actual_ret = actual_method["return"]
 
-	var is_ok := false
-	if expected_ret.type == actual_ret.type:
-		if expected_ret.type == TYPE_OBJECT:
-			var e_cls: StringName = expected_ret.get("class_name", &"")
-			var a_cls: StringName = actual_ret.get("class_name", &"")
-			is_ok = (
-				e_cls == &""
-				or a_cls == e_cls
-				or ClassDB.is_parent_class(a_cls, e_cls)
-				or _is_custom_class_parent(a_cls, e_cls)
-			)
-		else:
-			is_ok = true
-	elif expected_ret.type == TYPE_NIL:
-		is_ok = true
+	var is_ok := _is_type_compatible(
+		expected_ret.type,
+		actual_ret.type,
+		expected_ret.get("class_name", &""),
+		actual_ret.get("class_name", &"")
+	)
 
 	# 判定結果をエラー配列に反映させる
 	if not is_ok:
@@ -199,8 +190,8 @@ static func validate_signal(res: CHECK_RESULT, target: Object, interface_type: S
 
 		# 戻り値型（シグナルの場合は通常 void だが、辞書にあれば比較）
 		if "return" in expected_signal and "return" in actual_signal:
-			var expected_ret = expected_signal.return
-			var actual_ret = actual_signal.return
+			var expected_ret = expected_signal["return"]
+			var actual_ret = actual_signal["return"]
 			if expected_ret.type != actual_ret.type:
 				res.add_error(
 					interface_type,
