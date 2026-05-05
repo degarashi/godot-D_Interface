@@ -161,10 +161,13 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 	var comment_buffer: Array[String] = []
 	var is_first_def := true
 
+	# 改行を含む定義（( )内）を一行にまとめる
+	var collapsed_text := _collapse_multiline(source_text)
+
 	# 複数行Enumの解析
 	var re_enum_block := RegEx.new()
 	re_enum_block.compile("enum\\s+(?<name>\\w+)\\s*\\{(?<values>[^}]*)\\}")
-	var enum_matches := re_enum_block.search_all(source_text)
+	var enum_matches := re_enum_block.search_all(collapsed_text)
 	for m: RegExMatch in enum_matches:
 		var name := m.get_string("name")
 		var values := m.get_string("values").strip_edges().replace("\n", " ")
@@ -188,7 +191,7 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 	re_extends.compile("^extends\\s+")
 
 	# Enum以外の定義を行単位で解析
-	for raw_line: String in source_text.split("\n"):
+	for raw_line: String in collapsed_text.split("\n"):
 		var line := raw_line.strip_edges()
 
 		# ドキュメントコメントの収集
@@ -273,6 +276,22 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 	return defs
 
 
+## @brief 括弧内の改行を削除して一行にまとめる
+static func _collapse_multiline(text: String) -> String:
+	var result := ""
+	var depth := 0
+	for i in range(text.length()):
+		var c := text[i]
+		if c == "(": depth += 1
+		elif c == ")": depth -= 1
+		
+		if c == "\n" and depth > 0:
+			result += " "
+		else:
+			result += c
+	return result
+
+
 ## @brief ファイル名からインターフェースクラス名を生成 (i_pilot -> IPilot)
 static func _format_class_name(raw: String) -> String:
 	var clean := raw.trim_prefix("i_").capitalize().replace(" ", "")
@@ -284,11 +303,51 @@ static func _extract_arg_names(args_str: String) -> String:
 	if args_str.strip_edges().is_empty():
 		return ""
 	var names: Array[String] = []
-	for part in args_str.split(","):
+	var parts := _split_respecting(args_str, ",")
+	for part in parts:
 		# 'name: type = val' から 'name' を抽出する
 		var name_part := part.split(":")[0].split("=")[0].strip_edges()
-		names.append(name_part)
+		if not name_part.is_empty():
+			names.append(name_part)
 	return ", ".join(names)
+
+
+## @brief 括弧やクォートを考慮して文字列を分割する
+static func _split_respecting(s: String, split_char: String) -> Array[String]:
+	var parts: Array[String] = []
+	var current := ""
+	var depth_p := 0 # ()
+	var depth_b := 0 # []
+	var depth_c := 0 # {}
+	var in_quote := false
+	var quote_char := ""
+	
+	var i := 0
+	while i < s.length():
+		var char := s[i]
+		if not in_quote:
+			if char == "\"" or char == "'":
+				in_quote = true
+				quote_char = char
+			elif char == "(" : depth_p += 1
+			elif char == ")" : depth_p -= 1
+			elif char == "[" : depth_b += 1
+			elif char == "]" : depth_b -= 1
+			elif char == "{" : depth_c += 1
+			elif char == "}" : depth_c -= 1
+			
+			if char == split_char and depth_p == 0 and depth_b == 0 and depth_c == 0:
+				parts.append(current)
+				current = ""
+			else:
+				current += char
+		else:
+			if char == quote_char and s[i-1] != "\\":
+				in_quote = false
+			current += char
+		i += 1
+	parts.append(current)
+	return parts
 
 
 ## @brief 実装クラス（.gd）にボイラープレートを自動注入する
