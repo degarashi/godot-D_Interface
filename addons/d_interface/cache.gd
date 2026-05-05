@@ -41,7 +41,6 @@ class ScriptEnt:
 		getter_func: Callable,
 		filter_func: Callable = func(_a: Dictionary): return true
 	) -> Array:
-		I_BASE.get_script_method_list()
 		var ar := _array_subtract(
 			# 対象ObjectからGetした物
 			getter_func.call(scr),
