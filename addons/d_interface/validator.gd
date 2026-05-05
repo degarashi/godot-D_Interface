@@ -129,7 +129,6 @@ static func _validate_method(
 		)
 
 	return err
-	return err
 
 
 # ------------- [Public Method] -------------
