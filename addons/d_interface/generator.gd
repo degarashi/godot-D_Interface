@@ -357,6 +357,7 @@ static func update_implements_boilerplate(path: String) -> void:
 		return
 	var source := f.get_as_text()
 	f.close()
+	var source_orig := source
 
 	var lines := source.split("\n")
 	var ifc_names: Array[String] = []
@@ -375,29 +376,13 @@ static func update_implements_boilerplate(path: String) -> void:
 
 	# ブロック定義タグ
 	const LIST_START = "# --- INTERFACE LIST (AUTO-GENERATED) ---"
+	const LIST_END = "# --- END INTERFACE LIST ---"
 	const IMPL_START = "# --- INTERFACE IMPLEMENTER (AUTO-GENERATED) ---"
 	const IMPL_END = "# --- END INTERFACE IMPLEMENTER ---"
 	const VAR_START = "# --- INTERFACE VARIABLES (STUBS) ---"
 	const VAR_END = "# --- END INTERFACE VARIABLES ---"
 	const STUB_START = "# --- INTERFACE METHODS (STUBS) ---"
 	const STUB_END = "# --- END INTERFACE METHODS ---"
-
-	# すでにブロックが存在するかチェック
-	var has_list_block := source.contains(LIST_START)
-	var has_impl_block := source.contains(IMPL_START)
-	var has_var_block := source.contains(VAR_START)
-	var has_stub_block := source.contains(STUB_START)
-	var has_manual_impl := (
-		source.contains("func get_implementer") or source.contains("func set_implementer")
-	)
-
-	# 全て揃っているなら終了
-	if has_list_block and (has_impl_block or has_manual_impl) and has_var_block and has_stub_block:
-		return
-
-	# 末尾の空行を掃除
-	while lines.size() > 0 and lines[-1].strip_edges().is_empty():
-		lines.remove_at(lines.size() - 1)
 
 	# 共通の定義抽出処理
 	var all_defs: Array[Dictionary] = []
@@ -409,26 +394,67 @@ static func update_implements_boilerplate(path: String) -> void:
 		all_defs.append({"name": ifc_name, "defs": _parse_single_ifc(ifc_file.get_as_text())})
 		ifc_file.close()
 
-	# LISTブロック
-	if not has_list_block:
-		lines.append("")
-		lines.append(LIST_START)
-		for item in all_defs:
-			lines.append("## @interface {0}".format([item.name]))
-			if not item.defs.interface_comment.is_empty():
-				for c in item.defs.interface_comment:
-					lines.append(c)
-		lines.append("static func implements_list() -> Array[Script]:")
-		lines.append("	return [{0}]".format([", ".join(ifc_names)]))
-		lines.append("# --- END INTERFACE LIST ---")
+	# LISTブロックの更新または生成
+	var list_content_lines: Array[String] = []
+	list_content_lines.append(LIST_START)
+	for item in all_defs:
+		list_content_lines.append("## @interface {0}".format([item.name]))
+		if not item.defs.interface_comment.is_empty():
+			for c in item.defs.interface_comment:
+				list_content_lines.append(c)
+	list_content_lines.append("static func implements_list() -> Array[Script]:")
+	list_content_lines.append("	return [{0}]".format([", ".join(ifc_names)]))
+	list_content_lines.append(LIST_END)
+	var list_block := "\n".join(list_content_lines)
 
-	# IMPLEMENTERブロック
-	if not has_impl_block and not has_manual_impl:
+	var has_list_block := source.contains(LIST_START)
+	if has_list_block:
+		var start_idx := -1
+		var end_idx := -1
+		for i in range(lines.size()):
+			if lines[i].contains(LIST_START):
+				start_idx = i
+			elif lines[i].contains(LIST_END):
+				end_idx = i
+				break
+		
+		if start_idx != -1 and end_idx != -1:
+			# ブロックを削除して新しい内容を挿入
+			for i in range(end_idx - start_idx + 1):
+				lines.remove_at(start_idx)
+			
+			# 逆順に挿入して順序を維持
+			var reversed_list := list_content_lines.duplicate()
+			reversed_list.reverse()
+			for l in reversed_list:
+				lines.insert(start_idx, l)
+			
+			source = "\n".join(lines)
+	else:
+		# 末尾の空行を掃除
+		while lines.size() > 0 and lines[-1].strip_edges().is_empty():
+			lines.remove_at(lines.size() - 1)
 		lines.append("")
-		lines.append(IMPL_START)
-		lines.append("func get_implementer(_t: Script) -> Object:")
-		lines.append("	return self")
-		lines.append(IMPL_END)
+		lines.append(list_block)
+		# lines を更新したので、source も更新する
+		source = "\n".join(lines)
+
+	# 他のブロックが存在するかチェック
+	var has_impl_block := source.contains(IMPL_START)
+	var has_var_block := source.contains(VAR_START)
+	var has_stub_block := source.contains(STUB_START)
+	var has_manual_impl := (
+		source.contains("func get_implementer") or source.contains("func set_implementer")
+	)
+
+	# 全て揃っているなら書き込んで終了
+	if (has_impl_block or has_manual_impl) and has_var_block and has_stub_block:
+		_write_if_changed(path, source_orig, source)
+		return
+
+	# 以降、新規追加が必要な場合
+	# 念のため最新の source から lines を再生成
+	lines = source.split("\n")
 
 	# VARIABLES (STUBS)ブロック
 	if not has_var_block:
@@ -479,12 +505,18 @@ static func update_implements_boilerplate(path: String) -> void:
 			lines.append(STUB_END)
 
 	lines.append("")
-	var new_source := "\n".join(lines)
-	if source != new_source:
+	_write_if_changed(path, source, "\n".join(lines))
+
+
+static func _write_if_changed(path: String, old_source: String, new_source: String) -> void:
+	if old_source != new_source:
 		var fw := FileAccess.open(path, FileAccess.WRITE)
+		if not fw:
+			return
 		fw.store_string(new_source)
+		fw.flush()
 		fw.close()
-		print("[Interface] Injected missing boilerplate for: ", path.get_file())
+		print("[Interface] Updated/Injected boilerplate for: ", path.get_file())
 
 
 ## @brief クラス名(IMover)から対応する .ifc パスを探索する
@@ -512,3 +544,14 @@ static func _search_file_recursive(dir_path: String, target_name: String) -> Str
 			return dir_path.path_join(file_name)
 		file_name = dir.get_next()
 	return ""
+
+
+static func _escape_regex(text: String) -> String:
+	# List of characters that have special meaning in RegEx
+	var special_characters = [
+		"\\", ".", "+", "*", "?", "[", "^", "]", "$", "(", ")", "{", "}", "=", "!", "<", ">", "|", ":", "-"
+	]
+	var escaped_text = text
+	for c in special_characters:
+		escaped_text = escaped_text.replace(c, "\\" + c)
+	return escaped_text
