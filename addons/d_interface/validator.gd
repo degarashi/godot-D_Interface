@@ -391,5 +391,20 @@ static func validate_implements_marker(res: CHECK_RESULT, scr: Script) -> void:
 
 	new_script_names.sort()
 
-	if marker_names != new_script_names:
+	# marker_names から、親クラスですでに実装済みのものを除外したリストを作成
+	var parent_script_names: Array[String] = []
+	for s in parent_scripts:
+		if s is Script:
+			var s_name := s.get_global_name()
+			if s_name == "":
+				s_name = s.resource_path.get_file().get_basename()
+			parent_script_names.append(String(s_name))
+
+	var marker_new_names: Array[String] = []
+	for n in marker_names:
+		if not n in parent_script_names:
+			marker_new_names.append(n)
+	marker_new_names.sort()
+
+	if marker_new_names != new_script_names:
 		res.add_error(scr, ERROR.ErrorImplementsMarkerMismatch.new(marker_names, new_script_names))
