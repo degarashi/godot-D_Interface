@@ -269,7 +269,7 @@ class ErrorImplementsMarkerMismatch:
 
 	func as_string() -> String:
 		return (
-			"Implements marker mismatch: # implements [%s] vs implements_list() returns [%s]"
+			"Implements marker mismatch: implements marker [%s] vs implements_list() returns [%s]"
 			% [", ".join(expected_markers), ", ".join(actual_scripts)]
 		)
 
