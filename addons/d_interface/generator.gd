@@ -362,7 +362,7 @@ static func update_implements_boilerplate(path: String) -> void:
 	var lines := source.split("\n")
 	var ifc_names: Array[String] = []
 	var re_marker := RegEx.new()
-	re_marker.compile("(?m)^#{1,2}\\s*implements\\s+(?<names>[\\w\\s,]+?)(?=\\r?$|\\n|$)")
+	re_marker.compile("(?m)^\\s*#+\\s*implements\\s+(?<names>[\\w\\s,]+?)(?=\\r?$|\\n|$)")
 
 	# マーカーを探す
 	var m := re_marker.search(source)

@@ -340,7 +340,7 @@ static func validate_implements_marker(res: CHECK_RESULT, scr: Script) -> void:
 	file.close()
 
 	var re_marker := RegEx.new()
-	re_marker.compile("(?m)^#{1,2}\\s*implements\\s+(?<names>[\\w\\s,]+?)(?=\\r?$|\\n|$)")
+	re_marker.compile("(?m)^\\s*#+\\s*implements\\s+(?<names>[\\w\\s,]+?)(?=\\r?$|\\n|$)")
 	var m := re_marker.search(source)
 
 	var marker_names: Array[String] = []
