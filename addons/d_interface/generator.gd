@@ -62,14 +62,22 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 		var data: Dictionary = my_defs.vars[var_name]
 		_append_comments(lines, data)
 		lines.append("var {0}: {1}:".format([var_name, data.type]))
-		lines.append(
-			"	set(v): assert(is_valid(), \"[Interface] Accessing freed instance\"); _impl.{0} = v".format(
-				[var_name]
+		(
+			lines
+			. append(
+				(
+					'	set(v): assert(is_valid(), "[Interface] Accessing freed instance"); _impl.{0} = v'
+					. format([var_name])
+				)
 			)
 		)
-		lines.append(
-			"	get: assert(is_valid(), \"[Interface] Accessing freed instance\"); return _impl.{0}".format(
-				[var_name]
+		(
+			lines
+			. append(
+				(
+					'	get: assert(is_valid(), "[Interface] Accessing freed instance"); return _impl.{0}'
+					. format([var_name])
+				)
 			)
 		)
 		lines.append("")
@@ -102,8 +110,12 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 	if not my_defs.signals.is_empty():
 		lines.append("func _on_setup_interface() -> void:")
 		for sig_name: String in my_defs.signals:
-			lines.append("	if _impl.has_signal(\"{0}\"):".format([sig_name]))
-			lines.append("		_impl.connect(\"{0}\", func(&1): {0}.emit(&1))".format([sig_name]).replace("&1", _extract_arg_names(my_defs.signals[sig_name].args)))
+			lines.append('	if _impl.has_signal("{0}"):'.format([sig_name]))
+			lines.append(
+				'		_impl.connect("{0}", func(&1): {0}.emit(&1))'.format([sig_name]).replace(
+					"&1", _extract_arg_names(my_defs.signals[sig_name].args)
+				)
+			)
 		lines.append("")
 
 	# --- 補助関数の追加 ---
@@ -220,11 +232,11 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 			if is_first_def and not comment_buffer.is_empty():
 				defs.interface_comment.append_array(comment_buffer)
 				comment_buffer.clear()
-			
+
 			var ename := m_enum.get_string("name")
 			if defs.enums.has(ename):
 				defs.enums[ename].comment = comment_buffer.duplicate()
-			
+
 			is_first_def = false
 			comment_buffer.clear()
 			continue
@@ -282,9 +294,11 @@ static func _collapse_multiline(text: String) -> String:
 	var depth := 0
 	for i in range(text.length()):
 		var c := text[i]
-		if c == "(": depth += 1
-		elif c == ")": depth -= 1
-		
+		if c == "(":
+			depth += 1
+		elif c == ")":
+			depth -= 1
+
 		if c == "\n" and depth > 0:
 			result += " "
 		else:
@@ -316,33 +330,39 @@ static func _extract_arg_names(args_str: String) -> String:
 static func _split_respecting(s: String, split_char: String) -> Array[String]:
 	var parts: Array[String] = []
 	var current := ""
-	var depth_p := 0 # ()
-	var depth_b := 0 # []
-	var depth_c := 0 # {}
+	var depth_p := 0  # ()
+	var depth_b := 0  # []
+	var depth_c := 0  # {}
 	var in_quote := false
 	var quote_char := ""
-	
+
 	var i := 0
 	while i < s.length():
 		var char := s[i]
 		if not in_quote:
-			if char == "\"" or char == "'":
+			if char == '"' or char == "'":
 				in_quote = true
 				quote_char = char
-			elif char == "(" : depth_p += 1
-			elif char == ")" : depth_p -= 1
-			elif char == "[" : depth_b += 1
-			elif char == "]" : depth_b -= 1
-			elif char == "{" : depth_c += 1
-			elif char == "}" : depth_c -= 1
-			
+			elif char == "(":
+				depth_p += 1
+			elif char == ")":
+				depth_p -= 1
+			elif char == "[":
+				depth_b += 1
+			elif char == "]":
+				depth_b -= 1
+			elif char == "{":
+				depth_c += 1
+			elif char == "}":
+				depth_c -= 1
+
 			if char == split_char and depth_p == 0 and depth_b == 0 and depth_c == 0:
 				parts.append(current)
 				current = ""
 			else:
 				current += char
 		else:
-			if char == quote_char and s[i-1] != "\\":
+			if char == quote_char and s[i - 1] != "\\":
 				in_quote = false
 			current += char
 		i += 1
@@ -392,7 +412,9 @@ static func update_implements_boilerplate(path: String) -> void:
 		if not item.defs.interface_comment.is_empty():
 			for c in item.defs.interface_comment:
 				list_content_lines.append(c)
-	list_content_lines.append("static func {0}() -> Array[Script]:".format([Interface.IMPL_LIST_NAME]))
+	list_content_lines.append(
+		"static func {0}() -> Array[Script]:".format([Interface.IMPL_LIST_NAME])
+	)
 	list_content_lines.append("	return [{0}]".format([", ".join(ifc_names)]))
 	list_content_lines.append(Interface.TAG_LIST_END)
 	var list_block := "\n".join(list_content_lines)
@@ -407,18 +429,18 @@ static func update_implements_boilerplate(path: String) -> void:
 			elif lines[i].contains(Interface.TAG_LIST_END):
 				end_idx = i
 				break
-		
+
 		if start_idx != -1 and end_idx != -1:
 			# ブロックを削除して新しい内容を挿入
 			for i in range(end_idx - start_idx + 1):
 				lines.remove_at(start_idx)
-			
+
 			# 逆順に挿入して順序を維持
 			var reversed_list := list_content_lines.duplicate()
 			reversed_list.reverse()
 			for l in reversed_list:
 				lines.insert(start_idx, l)
-			
+
 			source = "\n".join(lines)
 	else:
 		# 末尾の空行を掃除
@@ -434,7 +456,8 @@ static func update_implements_boilerplate(path: String) -> void:
 	var has_var_block := source.contains(Interface.TAG_VAR_START)
 	var has_stub_block := source.contains(Interface.TAG_STUB_START)
 	var has_manual_impl := (
-		source.contains("func " + Interface.GET_IMPLEMENTER_NAME) or source.contains("func " + Interface.SET_IMPLEMENTER_NAME)
+		source.contains("func " + Interface.GET_IMPLEMENTER_NAME)
+		or source.contains("func " + Interface.SET_IMPLEMENTER_NAME)
 	)
 
 	# 全て揃っているなら書き込んで終了
@@ -539,7 +562,26 @@ static func _search_file_recursive(dir_path: String, target_name: String) -> Str
 static func _escape_regex(text: String) -> String:
 	# List of characters that have special meaning in RegEx
 	var special_characters = [
-		"\\", ".", "+", "*", "?", "[", "^", "]", "$", "(", ")", "{", "}", "=", "!", "<", ">", "|", ":", "-"
+		"\\",
+		".",
+		"+",
+		"*",
+		"?",
+		"[",
+		"^",
+		"]",
+		"$",
+		"(",
+		")",
+		"{",
+		"}",
+		"=",
+		"!",
+		"<",
+		">",
+		"|",
+		":",
+		"-"
 	]
 	var escaped_text = text
 	for c in special_characters:
