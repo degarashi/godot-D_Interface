@@ -5,7 +5,6 @@ const CHECK_RESULT = preload("uid://ck862o06krlja")
 const C = preload("uid://beur775onkfdv")
 const CACHE = preload("uid://bgl5faa3wfm4d")
 const ERROR = preload("uid://c4n13cyd88clu")
-const IMPL_LIST_NAME = &"implements_list"
 
 
 # ------------- [Private Static Method] -------------
@@ -340,7 +339,7 @@ static func validate_implements_marker(res: CHECK_RESULT, scr: Script) -> void:
 	file.close()
 
 	var re_marker := RegEx.new()
-	re_marker.compile("(?m)^\\s*#+\\s*implements\\s+(?<names>[\\w\\s,]+?)(?=\\r?$|\\n|$)")
+	re_marker.compile(Interface.IMPLEMENTS_MARKER_RE)
 	var m := re_marker.search(source)
 
 	var marker_names: Array[String] = []
@@ -353,8 +352,8 @@ static func validate_implements_marker(res: CHECK_RESULT, scr: Script) -> void:
 
 	# 自身の implements_list
 	var actual_scripts: Array[Script] = []
-	if scr.has_method(IMPL_LIST_NAME):
-		actual_scripts = scr.call(IMPL_LIST_NAME)
+	if scr.has_method(Interface.IMPL_LIST_NAME):
+		actual_scripts = scr.call(Interface.IMPL_LIST_NAME)
 
 	# 重複チェック
 	var seen: Dictionary = {}
@@ -372,8 +371,8 @@ static func validate_implements_marker(res: CHECK_RESULT, scr: Script) -> void:
 	# 親の implements_list
 	var parent_scripts: Array[Script] = []
 	var base := scr.get_base_script()
-	if base and base.has_method(IMPL_LIST_NAME):
-		parent_scripts = base.call(IMPL_LIST_NAME)
+	if base and base.has_method(Interface.IMPL_LIST_NAME):
+		parent_scripts = base.call(Interface.IMPL_LIST_NAME)
 
 	# 親には含まれない、このクラス固有の実装スクリプトを抽出
 	var new_scripts: Array[Script] = []

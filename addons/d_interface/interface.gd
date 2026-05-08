@@ -21,6 +21,9 @@ const IMPL_LIST_NAME = &"implements_list"
 const CHECK_RESULT = preload("uid://ck862o06krlja")
 const GET_IMPLEMENTER_NAME = &"get_implementer"
 
+## インタフェース実装マーカー (# implements ...) の正規表現
+const IMPLEMENTS_MARKER_RE = "(?m)^\\s*#+\\s*implements\\s+(?<names>[\\w\\s,]+?)(?=\\r?$|\\n|$)"
+
 
 ## @brief 実装委譲先のオブジェクトを取得する関数
 ## @param obj 対象オブジェクト

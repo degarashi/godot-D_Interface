@@ -362,7 +362,7 @@ static func update_implements_boilerplate(path: String) -> void:
 	var lines := source.split("\n")
 	var ifc_names: Array[String] = []
 	var re_marker := RegEx.new()
-	re_marker.compile("(?m)^\\s*#+\\s*implements\\s+(?<names>[\\w\\s,]+?)(?=\\r?$|\\n|$)")
+	re_marker.compile(Interface.IMPLEMENTS_MARKER_RE)
 
 	# マーカーを探す
 	var m := re_marker.search(source)
@@ -402,7 +402,7 @@ static func update_implements_boilerplate(path: String) -> void:
 		if not item.defs.interface_comment.is_empty():
 			for c in item.defs.interface_comment:
 				list_content_lines.append(c)
-	list_content_lines.append("static func implements_list() -> Array[Script]:")
+	list_content_lines.append("static func {0}() -> Array[Script]:".format([Interface.IMPL_LIST_NAME]))
 	list_content_lines.append("	return [{0}]".format([", ".join(ifc_names)]))
 	list_content_lines.append(LIST_END)
 	var list_block := "\n".join(list_content_lines)
