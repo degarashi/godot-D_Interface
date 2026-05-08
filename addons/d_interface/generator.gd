@@ -374,16 +374,6 @@ static func update_implements_boilerplate(path: String) -> void:
 		if not n.is_empty():
 			ifc_names.append(n)
 
-	# ブロック定義タグ
-	const LIST_START = "# --- INTERFACE LIST (AUTO-GENERATED) ---"
-	const LIST_END = "# --- END INTERFACE LIST ---"
-	const IMPL_START = "# --- INTERFACE IMPLEMENTER (AUTO-GENERATED) ---"
-	const IMPL_END = "# --- END INTERFACE IMPLEMENTER ---"
-	const VAR_START = "# --- INTERFACE VARIABLES (STUBS) ---"
-	const VAR_END = "# --- END INTERFACE VARIABLES ---"
-	const STUB_START = "# --- INTERFACE METHODS (STUBS) ---"
-	const STUB_END = "# --- END INTERFACE METHODS ---"
-
 	# 共通の定義抽出処理
 	var all_defs: Array[Dictionary] = []
 	for ifc_name in ifc_names:
@@ -396,7 +386,7 @@ static func update_implements_boilerplate(path: String) -> void:
 
 	# LISTブロックの更新または生成
 	var list_content_lines: Array[String] = []
-	list_content_lines.append(LIST_START)
+	list_content_lines.append(Interface.TAG_LIST_START)
 	for item in all_defs:
 		list_content_lines.append("## @interface {0}".format([item.name]))
 		if not item.defs.interface_comment.is_empty():
@@ -404,17 +394,17 @@ static func update_implements_boilerplate(path: String) -> void:
 				list_content_lines.append(c)
 	list_content_lines.append("static func {0}() -> Array[Script]:".format([Interface.IMPL_LIST_NAME]))
 	list_content_lines.append("	return [{0}]".format([", ".join(ifc_names)]))
-	list_content_lines.append(LIST_END)
+	list_content_lines.append(Interface.TAG_LIST_END)
 	var list_block := "\n".join(list_content_lines)
 
-	var has_list_block := source.contains(LIST_START)
+	var has_list_block := source.contains(Interface.TAG_LIST_START)
 	if has_list_block:
 		var start_idx := -1
 		var end_idx := -1
 		for i in range(lines.size()):
-			if lines[i].contains(LIST_START):
+			if lines[i].contains(Interface.TAG_LIST_START):
 				start_idx = i
-			elif lines[i].contains(LIST_END):
+			elif lines[i].contains(Interface.TAG_LIST_END):
 				end_idx = i
 				break
 		
@@ -440,11 +430,11 @@ static func update_implements_boilerplate(path: String) -> void:
 		source = "\n".join(lines)
 
 	# 他のブロックが存在するかチェック
-	var has_impl_block := source.contains(IMPL_START)
-	var has_var_block := source.contains(VAR_START)
-	var has_stub_block := source.contains(STUB_START)
+	var has_impl_block := source.contains(Interface.TAG_IMPL_START)
+	var has_var_block := source.contains(Interface.TAG_VAR_START)
+	var has_stub_block := source.contains(Interface.TAG_STUB_START)
 	var has_manual_impl := (
-		source.contains("func get_implementer") or source.contains("func set_implementer")
+		source.contains("func " + Interface.GET_IMPLEMENTER_NAME) or source.contains("func " + Interface.SET_IMPLEMENTER_NAME)
 	)
 
 	# 全て揃っているなら書き込んで終了
@@ -474,9 +464,9 @@ static func update_implements_boilerplate(path: String) -> void:
 				var_stubs.append("var {0}: {1}".format([var_name, d.type]))
 
 		if not var_stubs.is_empty():
-			lines.append("\n" + VAR_START)
+			lines.append("\n" + Interface.TAG_VAR_START)
 			lines.append_array(var_stubs)
-			lines.append(VAR_END)
+			lines.append(Interface.TAG_VAR_END)
 
 	# METHODS (STUBS)ブロック
 	if not has_stub_block:
@@ -500,9 +490,9 @@ static func update_implements_boilerplate(path: String) -> void:
 				func_stubs.append("	pass # TODO: Implement")
 
 		if not func_stubs.is_empty():
-			lines.append("\n" + STUB_START)
+			lines.append("\n" + Interface.TAG_STUB_START)
 			lines.append_array(func_stubs)
-			lines.append(STUB_END)
+			lines.append(Interface.TAG_STUB_END)
 
 	lines.append("")
 	_write_if_changed(path, source, "\n".join(lines))

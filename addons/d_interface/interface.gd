@@ -20,9 +20,20 @@ const VALIDATOR = preload("uid://b4t2yue08ojax")
 const IMPL_LIST_NAME = &"implements_list"
 const CHECK_RESULT = preload("uid://ck862o06krlja")
 const GET_IMPLEMENTER_NAME = &"get_implementer"
+const SET_IMPLEMENTER_NAME = &"set_implementer"
 
 ## インタフェース実装マーカー (# implements ...) の正規表現
 const IMPLEMENTS_MARKER_RE = "(?m)^\\s*#+\\s*implements\\s+(?<names>[\\w\\s,]+?)(?=\\r?$|\\n|$)"
+
+# --- 自動注入用ブロックマーカー ---
+const TAG_LIST_START = "# --- INTERFACE LIST (AUTO-GENERATED) ---"
+const TAG_LIST_END = "# --- END INTERFACE LIST ---"
+const TAG_IMPL_START = "# --- INTERFACE IMPLEMENTER (AUTO-GENERATED) ---"
+const TAG_IMPL_END = "# --- END INTERFACE IMPLEMENTER ---"
+const TAG_VAR_START = "# --- INTERFACE VARIABLES (STUBS) ---"
+const TAG_VAR_END = "# --- END INTERFACE VARIABLES ---"
+const TAG_STUB_START = "# --- INTERFACE METHODS (STUBS) ---"
+const TAG_STUB_END = "# --- END INTERFACE METHODS ---"
 
 
 ## @brief 実装委譲先のオブジェクトを取得する関数

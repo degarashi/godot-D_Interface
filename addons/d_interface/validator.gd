@@ -135,8 +135,8 @@ static func _validate_method(
 static func validate(res: CHECK_RESULT, target_obj: Object, interface_type: Script) -> void:
 	# 実装を保持している「真の対象」を取得する
 	var implementer: Object = target_obj
-	if target_obj.has_method("get_implementer"):
-		var delegated = target_obj.get_implementer(interface_type)
+	if target_obj.has_method(Interface.GET_IMPLEMENTER_NAME):
+		var delegated = target_obj.call(Interface.GET_IMPLEMENTER_NAME, interface_type)
 		if delegated:
 			implementer = delegated
 
