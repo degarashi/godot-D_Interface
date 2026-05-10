@@ -35,9 +35,10 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 	# --- 継承先の決定 ---
 	# 親がいればそのインターフェースクラス名、いなければ InterfaceBase
 	if not parent_info.class_name.is_empty():
-		lines.append("extends {0}\n".format([parent_info.class_name]))
+		lines.append("extends {0}".format([parent_info.class_name]))
 	else:
-		lines.append("extends InterfaceBase\n")
+		lines.append("extends InterfaceBase")
+	lines.append("")
 
 	# Enumの書き出し
 	for enum_name: String in my_defs.enums:
@@ -420,6 +421,8 @@ static func update_implements_boilerplate(path: String) -> void:
 	var list_block := "\n".join(list_content_lines)
 
 	var has_list_block := source.contains(Interface.TAG_LIST_START)
+	var has_manual_list := source.contains("func " + Interface.IMPL_LIST_NAME)
+
 	if has_list_block:
 		var start_idx := -1
 		var end_idx := -1
@@ -442,7 +445,7 @@ static func update_implements_boilerplate(path: String) -> void:
 				lines.insert(start_idx, l)
 
 			source = "\n".join(lines)
-	else:
+	elif not has_manual_list:
 		# 末尾の空行を掃除
 		while lines.size() > 0 and lines[-1].strip_edges().is_empty():
 			lines.remove_at(lines.size() - 1)
@@ -461,7 +464,12 @@ static func update_implements_boilerplate(path: String) -> void:
 	)
 
 	# 全て揃っているなら書き込んで終了
-	if (has_impl_block or has_manual_impl) and has_var_block and has_stub_block:
+	if (
+		(has_list_block or has_manual_list)
+		and (has_impl_block or has_manual_impl)
+		and has_var_block
+		and has_stub_block
+	):
 		_write_if_changed(path, source_orig, source)
 		return
 
@@ -480,14 +488,16 @@ static func update_implements_boilerplate(path: String) -> void:
 					continue
 
 				var d: Dictionary = item.defs.vars[var_name]
-				var_stubs.append("\n## @interface {0}".format([item.name]))
+				var_stubs.append("## @interface {0}".format([item.name]))
 				if d.has("comment"):
 					for c in d.comment:
 						var_stubs.append(c)
 				var_stubs.append("var {0}: {1}".format([var_name, d.type]))
+				var_stubs.append("")
 
 		if not var_stubs.is_empty():
-			lines.append("\n" + Interface.TAG_VAR_START)
+			lines.append("")
+			lines.append(Interface.TAG_VAR_START)
 			lines.append_array(var_stubs)
 			lines.append(Interface.TAG_VAR_END)
 
@@ -503,7 +513,7 @@ static func update_implements_boilerplate(path: String) -> void:
 					continue
 
 				var d: Dictionary = item.defs.funcs[func_name]
-				func_stubs.append("\n## @interface {0}".format([item.name]))
+				func_stubs.append("## @interface {0}".format([item.name]))
 				if d.has("comment"):
 					for c in d.comment:
 						func_stubs.append(c)
@@ -511,14 +521,28 @@ static func update_implements_boilerplate(path: String) -> void:
 					func_stubs.append("## @await")
 				func_stubs.append("func {0}({1}) -> {2}:".format([func_name, d.args, d.ret]))
 				func_stubs.append("	pass # TODO: Implement")
+				func_stubs.append("")
 
 		if not func_stubs.is_empty():
-			lines.append("\n" + Interface.TAG_STUB_START)
+			lines.append("")
+			lines.append(Interface.TAG_STUB_START)
 			lines.append_array(func_stubs)
 			lines.append(Interface.TAG_STUB_END)
 
+	# IMPLEMENTER (委譲) ブロックの追加
+	if not has_impl_block and not has_manual_impl:
+		lines.append("")
+		lines.append(Interface.TAG_IMPL_START)
+		lines.append("func {0}(_t: Script) -> Object:".format([Interface.GET_IMPLEMENTER_NAME]))
+		lines.append("	return self")
+		lines.append(Interface.TAG_IMPL_END)
+
+	# 末尾の空行を正規化（必ず1つだけ空行がある状態にする）
+	while lines.size() > 0 and lines[-1].strip_edges().is_empty():
+		lines.remove_at(lines.size() - 1)
 	lines.append("")
-	_write_if_changed(path, source, "\n".join(lines))
+
+	_write_if_changed(path, source_orig, "\n".join(lines))
 
 
 static func _write_if_changed(path: String, old_source: String, new_source: String) -> void:
