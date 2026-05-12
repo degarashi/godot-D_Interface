@@ -409,7 +409,6 @@ static func update_implements_boilerplate(path: String) -> void:
 	var list_content_lines: Array[String] = []
 	list_content_lines.append(Interface.TAG_LIST_START)
 	for item in all_defs:
-		list_content_lines.append("## @interface {0}".format([item.name]))
 		if not item.defs.interface_comment.is_empty():
 			for c in item.defs.interface_comment:
 				list_content_lines.append(c)
