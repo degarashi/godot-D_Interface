@@ -188,11 +188,11 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 
 	var re_func := RegEx.new()
 	re_func.compile(
-		"(?<await>await\\s+)?func\\s+(?<name>\\w+)\\s*\\((?<args>.*)\\)\\s*(->\\s*(?<ret>[\\w.]+))?"
+		"(?<await>await\\s+)?func\\s+(?<name>\\w+)\\s*\\((?<args>.*)\\)\\s*(->\\s*(?<ret>[\\w.\\[\\],\\s]+))?"
 	)
 
 	var re_var := RegEx.new()
-	re_var.compile("var\\s+(?<name>\\w+)\\s*:\\s*(?<type>[\\w.]+)")
+	re_var.compile("var\\s+(?<name>\\w+)\\s*:\\s*(?<type>[\\w.\\[\\],\\s]+)")
 
 	var re_sig := RegEx.new()
 	re_sig.compile("signal\\s+(?<name>\\w+)\\s*(\\((?<args>.*)\\))?")
@@ -256,7 +256,7 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 		var m_func := re_func.search(line)
 		if m_func:
 			is_first_def = false
-			var ret := m_func.get_string("ret")
+			var ret := m_func.get_string("ret").strip_edges()
 			defs.funcs[m_func.get_string("name")] = {
 				"args": m_func.get_string("args"),
 				"ret": ret if not ret.is_empty() else "void",
@@ -271,7 +271,7 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 		if m_var:
 			is_first_def = false
 			defs.vars[m_var.get_string("name")] = {
-				"type": m_var.get_string("type"), "comment": comment_buffer.duplicate()
+				"type": m_var.get_string("type").strip_edges(), "comment": comment_buffer.duplicate()
 			}
 			comment_buffer.clear()
 			continue
