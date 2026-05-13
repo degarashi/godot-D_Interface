@@ -408,10 +408,6 @@ static func update_implements_boilerplate(path: String) -> void:
 	# LISTブロックの更新または生成
 	var list_content_lines: Array[String] = []
 	list_content_lines.append(Interface.TAG_LIST_START)
-	for item in all_defs:
-		if not item.defs.interface_comment.is_empty():
-			for c in item.defs.interface_comment:
-				list_content_lines.append(c)
 	list_content_lines.append(
 		"static func {0}() -> Array[Script]:".format([Interface.IMPL_LIST_NAME])
 	)
