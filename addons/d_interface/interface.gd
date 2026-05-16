@@ -132,9 +132,21 @@ static func as_interface(source: Object, t_if: Script) -> InterfaceBase:
 			valid_source = source
 
 	if valid_source:
+		# キャッシュの確認
+		var cache_key := &"__ifc_cache_" + str(t_if.get_instance_id())
+		if valid_source.has_meta(cache_key):
+			var cached_wrapper = valid_source.get_meta(cache_key)
+			if is_instance_valid(cached_wrapper):
+				return cached_wrapper
+
+		# 新規生成
 		var ret: InterfaceBase = t_if.new()
 		assert(ret is InterfaceBase, "as_interface: interface instance must extend InterfaceBase")
 		ret.setup_interface(valid_source)
+
+		# キャッシュへの保存
+		valid_source.set_meta(cache_key, ret)
+
 		return ret
 
 	return null
