@@ -111,10 +111,14 @@ static func generate_from_ifc(source_text: String, class_hint: String = "") -> S
 	if not my_defs.signals.is_empty():
 		lines.append("func _on_setup_interface() -> void:")
 		for sig_name: String in my_defs.signals:
+			var args_str := _extract_arg_names(my_defs.signals[sig_name].args)
+			var lambda_args := args_str if not args_str.is_empty() else ""
+			var emit_args := args_str if not args_str.is_empty() else ""
+
 			lines.append('	if _impl.has_signal("{0}"):'.format([sig_name]))
 			lines.append(
-				'		_impl.connect("{0}", func(&1): {0}.emit(&1))'.format([sig_name]).replace(
-					"&1", _extract_arg_names(my_defs.signals[sig_name].args)
+				"		_impl.{0}.connect(func({1}): {0}.emit({2}))".format(
+					[sig_name, lambda_args, emit_args]
 				)
 			)
 		lines.append("")
