@@ -149,7 +149,7 @@ static func as_interface(
 
 	if valid_source:
 		# キャッシュの確認
-		var cache_key := &"__ifc_cache_" + str(t_if.get_instance_id())
+		var cache_key := &"__ifc_cache_" + String.num_uint64(t_if.get_instance_id())
 		if valid_source.has_meta(cache_key):
 			var cached_wrapper = valid_source.get_meta(cache_key)
 			if is_instance_valid(cached_wrapper):
