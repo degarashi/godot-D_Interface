@@ -191,8 +191,11 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 		defs.enums[name] = {"values": values, "comment": []}
 
 	var re_func := RegEx.new()
-	re_func.compile(
-		"(?<await>await\\s+)?func\\s+(?<name>\\w+)\\s*\\((?<args>.*)\\)\\s*(->\\s*(?<ret>[\\w.\\[\\],\\s]+))?"
+	(
+		re_func
+		. compile(
+			"(?<await>await\\s+)?func\\s+(?<name>\\w+)\\s*\\((?<args>.*)\\)\\s*(->\\s*(?<ret>[\\w.\\[\\],\\s]+))?"
+		)
 	)
 
 	var re_var := RegEx.new()
@@ -275,7 +278,8 @@ static func _parse_single_ifc(source_text: String) -> Dictionary:
 		if m_var:
 			is_first_def = false
 			defs.vars[m_var.get_string("name")] = {
-				"type": m_var.get_string("type").strip_edges(), "comment": comment_buffer.duplicate()
+				"type": m_var.get_string("type").strip_edges(),
+				"comment": comment_buffer.duplicate()
 			}
 			comment_buffer.clear()
 			continue
