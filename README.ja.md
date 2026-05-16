@@ -12,12 +12,16 @@ DInterface は、GDScript にインターフェースの仕組みを導入する
 - **ボイラープレートの自動注入**: `# implements` マーカーを使用することで、実装用のスタブやボイラープレートを GDScript に自動挿入する。専用のブロック内で管理されるため、ユーザーコードを上書きしにくい。
 - **ドキュメントコメントの継承**: `.ifc` ファイル内の `##` で始まるドキュメントコメントを生成スクリプトに引き継ぐ。
 - **強力な検証機能**:
+    - `Project` > `Tools` > `D-Interface: Bulk Validate All` からプロジェクト内の全スクリプトを一括検証可能（ショートカット: `Ctrl + Shift + I`）。
     - メソッドの引数の数、型、戻り値の型の不一致を検出（`await` メソッドに対応）。
     - プロパティの型一致を検証。
     - シグナルの引数構成を検証。
     - エンジンクラスおよびカスタムクラス（`class_name`）の継承関係を考慮した型チェック。
+    - 継承チェックのキャッシュ化によるパフォーマンスの最適化。
 - **キャストと安全な実行**: 
     - `IInterface.cast(object)` または `IInterface.cast_checked(object)` のような形式で、オブジェクトをインターフェース型にラップできる。
+    - パフォーマンスの最適化：インターフェースラッパーはオブジェクトごとにキャッシュ・再利用され、メモリ負荷を抑えるとともに同一性を保証する（`cast(obj) == cast(obj)`）。
+    - 診断サポート：`as_interface(obj, IInterface, true)` のように第3引数を `true` にすることで、キャスト失敗時に詳細な理由（不足しているメソッドや型の不一致など）を警告出力できる。
     - `Interface.proc_interface(object, IInterface, callback)` による安全な実行。
 - **コンポジション（合成）**: `InterfaceWrap` による複数オブジェクトの統合実装や、`get_implementer` による実装の委譲をサポート。
 - **外部エディタ連携**: 定義ファイルの編集に使い慣れた外部エディタ（VSCode, Neovim 等）を使用可能。
@@ -139,6 +143,7 @@ if mover:
 - **Auto Check On Reload**: スクリプト保存時などに自動でインターフェースの実装検証を行い、不備があればエラーを出力する。
 - **Auto Generate Bridge On Save**: `.ifc` ファイル保存時に `.gd` ブリッジファイルを自動生成する。
 - **Auto Inject Boilerplate On Reload**: `# implements` マーカーに基づき、インターフェースのボイラープレートを自動注入する。
+- **Excluded Directories**: 一括検証時にスキップするディレクトリのリスト（デフォルト: `["addons"]`）。
 
 ## 注意事項
 

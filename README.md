@@ -12,12 +12,16 @@ It automatically generates bridge scripts from custom definition files with the 
 - **Automatic Boilerplate Injection**: Automatically injects implementation stubs and boilerplate into GDScripts using the `# implements` marker. Manages code in dedicated blocks to prevent overwriting user logic.
 - **Documentation Support**: Documentation comments (`##`) in `.ifc` files are preserved in the generated scripts.
 - **Powerful Validation**:
+    - Bulk validate all scripts in the project via `Project` > `Tools` > `D-Interface: Bulk Validate All` (Shortcut: `Ctrl + Shift + I`).
     - Detects mismatches in method argument count, types, and return types (supporting `await` methods).
     - Validates property type matches.
     - Validates signal argument configurations.
     - Type checking considering inheritance relationships of engine classes and custom classes (`class_name`).
+    - Optimized performance with caching for inheritance checks.
 - **Casting & Safe Execution**: 
     - Wrap objects into interface types using `IInterface.cast(object)` or `IInterface.cast_checked(object)`.
+    - Performance optimized: Interface wrappers are cached and reused for the same object to minimize memory overhead and ensure identity (`cast(obj) == cast(obj)`).
+    - Diagnostic support: `as_interface(obj, IInterface, true)` outputs detailed reasons (missing methods, type mismatches, etc.) if casting fails.
     - Safe execution with `Interface.proc_interface(object, IInterface, callback)`.
 - **Composition**: Support for multi-object implementation via `InterfaceWrap` and delegation via `get_implementer`.
 - **External Editor Integration**: Use your favorite external editors (VSCode, Neovim, etc.) to edit definition files.
@@ -139,6 +143,7 @@ Configurable in the `d_interface/check` section of `Editor Settings`.
 - **Auto Check On Reload**: Automatically validates interface implementation when scripts are saved and outputs errors if there are issues.
 - **Auto Generate Bridge On Save**: Automatically generates `.gd` bridge files when `.ifc` files are saved.
 - **Auto Inject Boilerplate On Reload**: Automatically injects interface boilerplate based on the `# implements` marker.
+- **Excluded Directories**: Directories to skip during bulk validation (default: `["addons"]`).
 
 ## Notes
 
