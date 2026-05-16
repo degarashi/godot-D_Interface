@@ -13,6 +13,7 @@ const GENERATOR = preload("uid://dknhe70ukestb")
 const EDITOR_SETTING_PATH = "d_interface/check/auto_check_on_reload"
 const AUTO_GENERATE_SETTING_PATH = "d_interface/check/auto_generate_bridge_on_save"
 const AUTO_INJECT_SETTING_PATH = "d_interface/check/auto_inject_boilerplate_on_reload"
+const EXCLUDED_DIRS_SETTING_PATH = "d_interface/check/excluded_directories"
 
 const BRIDGE_MENU_TEXT = "D-Interface: Generate Bridge from Selected"
 
@@ -63,13 +64,12 @@ func _prepare_editor_settings() -> void:
 	if not settings.has_setting(EDITOR_SETTING_PATH):
 		settings.set_setting(EDITOR_SETTING_PATH, true)
 
-	# 設定画面で型や初期値を正しく認識させるためのヒント
 	settings.add_property_info(
 		{
 			"name": EDITOR_SETTING_PATH,
 			"type": TYPE_BOOL,
 			"hint": PROPERTY_HINT_NONE,
-			"hint_string": "Enable automatic interface validation when resources are reloaded."
+			"hint_string": ""
 		}
 	)
 
@@ -82,7 +82,7 @@ func _prepare_editor_settings() -> void:
 			"name": AUTO_GENERATE_SETTING_PATH,
 			"type": TYPE_BOOL,
 			"hint": PROPERTY_HINT_NONE,
-			"hint_string": "Automatically generate bridge .gd file when .ifc file is updated."
+			"hint_string": ""
 		}
 	)
 
@@ -94,14 +94,31 @@ func _prepare_editor_settings() -> void:
 			"name": AUTO_INJECT_SETTING_PATH,
 			"type": TYPE_BOOL,
 			"hint": PROPERTY_HINT_NONE,
-			"hint_string":
-			"Automatically inject interface boilerplate based on # implements marker."
+			"hint_string": ""
+		}
+	)
+
+	# 除外ディレクトリ設定
+	var default_excluded: Array = ["addons"]
+	if settings.has_setting(EXCLUDED_DIRS_SETTING_PATH):
+		var val = settings.get_setting(EXCLUDED_DIRS_SETTING_PATH)
+		if typeof(val) != TYPE_ARRAY:
+			settings.set_setting(EXCLUDED_DIRS_SETTING_PATH, default_excluded)
+	else:
+		settings.set_setting(EXCLUDED_DIRS_SETTING_PATH, default_excluded)
+
+	settings.add_property_info(
+		{
+			"name": EXCLUDED_DIRS_SETTING_PATH,
+			"type": TYPE_ARRAY,
+			"hint": PROPERTY_HINT_NONE,
 		}
 	)
 
 	settings.set_initial_value(EDITOR_SETTING_PATH, true, false)
 	settings.set_initial_value(AUTO_GENERATE_SETTING_PATH, true, false)
 	settings.set_initial_value(AUTO_INJECT_SETTING_PATH, true, false)
+	settings.set_initial_value(EXCLUDED_DIRS_SETTING_PATH, default_excluded, false)
 
 
 # ------------- [Editor Handling] -------------
@@ -272,9 +289,20 @@ func _check_interface_define_all() -> void:
 	print("----------------- begin interface defines check -----------------")
 	var stats := {"total_checked": 0, "error_scripts": 0, "errors": []}
 
+	# エディタ設定から除外ディレクトリを取得
+	var settings := get_editor_interface().get_editor_settings()
+	var excluded_dirs: Array[String] = []
+	if settings.has_setting(EXCLUDED_DIRS_SETTING_PATH):
+		var raw_dirs = settings.get_setting(EXCLUDED_DIRS_SETTING_PATH)
+		if raw_dirs is PackedStringArray or raw_dirs is Array:
+			for d in raw_dirs:
+				excluded_dirs.append(str(d))
+	else:
+		excluded_dirs = ["addons"]
+
 	var dir := DirAccess.open("res://")
 	if dir:
-		var scripts := _list_gd_files_recursive(dir, ["addons"])
+		var scripts := _list_gd_files_recursive(dir, excluded_dirs)
 		for path in scripts:
 			var res := load(path)
 			if res is Script:
@@ -396,18 +424,20 @@ static func _list_gd_files_recursive(dir: DirAccess, excluded_dirs: Array[String
 	while file_name != "":
 		if dir.current_is_dir():
 			if file_name != "." and file_name != "..":
-				# 除外ディレクトリをチェック
-				if excluded_dirs.has(file_name):
+				# 除外ディレクトリをチェック (名前単体、または res:// からの相対パス)
+				var sub_path := path.path_join(file_name)
+				var rel_path := sub_path.trim_prefix("res://").trim_prefix("/")
+				if excluded_dirs.has(file_name) or excluded_dirs.has(rel_path):
 					file_name = dir.get_next()
 					continue
-				var sub_path := path + "/" + file_name
+
 				var sub_dir := DirAccess.open(sub_path)
 				if sub_dir:
 					# 再帰呼び出しの結果を蓄積する
 					ret.append_array(_list_gd_files_recursive(sub_dir, excluded_dirs))
 		else:
 			if file_name.ends_with(".gd"):
-				ret.append(path + "/" + file_name)
+				ret.append(path.path_join(file_name))
 		file_name = dir.get_next()
 	dir.list_dir_end()
 	return ret
