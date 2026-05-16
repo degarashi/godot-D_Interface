@@ -293,8 +293,8 @@ static func _is_custom_class_parent(actual: StringName, expected: StringName) ->
 	if actual == expected:
 		return true
 
+	var inheritance_map := CACHE.get_inheritance_map()
 	var current := actual
-	var global_classes := ProjectSettings.get_global_class_list()
 
 	# 無限ループ防止用のカウンター
 	var safety_limit := 100
@@ -306,21 +306,16 @@ static func _is_custom_class_parent(actual: StringName, expected: StringName) ->
 		if ClassDB.class_exists(current):
 			return ClassDB.is_parent_class(current, expected)
 
-		var found := false
-		for c in global_classes:
-			if c["class"] == current:
-				var base: String = c["base"]
-				if base == expected:
-					return true
-				current = base
-				found = true
-				break
-
-		# global_class_list に見つからない場合
-		if not found:
-			# もしエンジン標準クラスに到達していたら上の class_exists で処理されるはずなので、
-			# ここに来るということは不明なクラス、あるいは継承関係が途切れたことを意味する
+		# キャッシュマップから親クラスを取得
+		var base: StringName = inheritance_map.get(current, &"")
+		if base == &"":
+			# global_class_list に見つからない場合
 			break
+
+		if base == expected:
+			return true
+
+		current = base
 
 	return false
 

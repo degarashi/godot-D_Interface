@@ -75,11 +75,22 @@ class ScriptEnt:
 
 
 static var _cache: Dictionary[Script, ScriptEnt] = {}
+static var _inheritance_cache: Dictionary[StringName, StringName] = {}
 
 
 # ------------- [Public Static Method] -------------
 static func clear_cache() -> void:
 	_cache.clear()
+	_inheritance_cache.clear()
+
+
+## @brief カスタムクラスの継承マップを取得する
+static func get_inheritance_map() -> Dictionary[StringName, StringName]:
+	if _inheritance_cache.is_empty():
+		var global_classes := ProjectSettings.get_global_class_list()
+		for c in global_classes:
+			_inheritance_cache[StringName(c["class"])] = StringName(c["base"])
+	return _inheritance_cache
 
 
 static func prepare_cache(interface_type: Script) -> ScriptEnt:
