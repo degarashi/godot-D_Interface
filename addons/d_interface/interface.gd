@@ -109,27 +109,43 @@ static func is_ancestor_of(scr_base: Script, scr: Script) -> bool:
 ## @brief 指定されたオブジェクトをインターフェースとしてラップする関数
 ## @param obj 対象オブジェクト
 ## @param t_if インタフェーススクリプト
+## @param warn_on_failure キャスト失敗時に警告を表示するかどうか
 ## @return インターフェースラッパーオブジェクト
-static func as_interface(source: Object, t_if: Script) -> InterfaceBase:
+static func as_interface(
+	source: Object, t_if: Script, warn_on_failure: bool = false
+) -> InterfaceBase:
 	assert(t_if != null, "as_interface: 't_if' is null — pass a valid Script")
 	if not source:
 		return null
 
 	var valid_source: Object = null
+	var failure_reason: String = ""
+
 	if is_instance_of(source, InterfaceBase):
 		# source is Interface
 		var i_base: InterfaceBase = source
 		if is_ancestor_of(t_if, source.get_script()):
 			valid_source = i_base._impl
+		else:
+			# _implが既に解放されている可能性を考慮
+			if is_instance_valid(i_base._impl):
+				valid_source = as_interface(i_base._impl, t_if, false)  # ネスト時は内側で警告を出さない
 
-		# _implが既に解放されている可能性を考慮
-		if is_instance_valid(i_base._impl):
-			valid_source = as_interface(i_base._impl, t_if)
+			if not valid_source:
+				failure_reason = (
+					"Source is an interface wrapper, but its underlying object does not implement %s."
+					% t_if.get_global_name()
+				)
 	else:
 		# source is Object instance
-		source = _get_implementer(source, t_if)
-		if implemented(source, t_if):
-			valid_source = source
+		var implementer = _get_implementer(source, t_if)
+		if implemented(implementer, t_if):
+			valid_source = implementer
+		else:
+			failure_reason = (
+				"Object does not implement interface %s (missing from implements_list)."
+				% t_if.get_global_name()
+			)
 
 	if valid_source:
 		# キャッシュの確認
@@ -148,6 +164,26 @@ static func as_interface(source: Object, t_if: Script) -> InterfaceBase:
 		valid_source.set_meta(cache_key, ret)
 
 		return ret
+
+	# キャスト失敗時の詳細警告
+	if warn_on_failure:
+		var if_name := t_if.get_global_name()
+		if if_name == "":
+			if_name = t_if.resource_path.get_file()
+
+		var msg := "[Interface] Cast failed: %s -> %s\n" % [source.get_class(), if_name]
+		msg += "Reason: %s\n" % failure_reason
+
+		# 詳細な不一致項目を検証
+		var res := CHECK_RESULT.new()
+		VALIDATOR.validate(res, source, t_if)
+		if res.has_error():
+			msg += "Validation errors:\n"
+			for err_ifc in res.errors:
+				for e in res.get_errors(err_ifc):
+					msg += "  - %s\n" % e.as_string()
+
+		push_warning(msg)
 
 	return null
 
