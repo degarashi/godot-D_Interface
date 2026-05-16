@@ -2,7 +2,7 @@
 extends EditorPlugin
 
 # ------------- [Constants] -------------
-const MENU_TEXT = "Check Interface Defines"
+const MENU_TEXT = "D-Interface: Bulk Validate All"
 const VALIDATOR = preload("uid://b4t2yue08ojax")
 const CHECK_RESULT = preload("uid://ck862o06krlja")
 const ERROR = preload("uid://c4n13cyd88clu")
@@ -14,7 +14,7 @@ const EDITOR_SETTING_PATH = "d_interface/check/auto_check_on_reload"
 const AUTO_GENERATE_SETTING_PATH = "d_interface/check/auto_generate_bridge_on_save"
 const AUTO_INJECT_SETTING_PATH = "d_interface/check/auto_inject_boilerplate_on_reload"
 
-const BRIDGE_MENU_TEXT = "Create Bridge Script from Selected"
+const BRIDGE_MENU_TEXT = "D-Interface: Generate Bridge from Selected"
 
 var ifc_importer: EditorImportPlugin = null
 
@@ -270,35 +270,50 @@ func _shortcut_input(event: InputEvent) -> void:
 # ------------- [Private Method] -------------
 func _check_interface_define_all() -> void:
 	print("----------------- begin interface defines check -----------------")
-	_check_interface_define_at("res://")
+	var stats := {"total_checked": 0, "error_scripts": 0, "errors": []}
 
-
-func _check_interface_define_at(dir_str: String) -> void:
-	var dir := DirAccess.open(dir_str)
+	var dir := DirAccess.open("res://")
 	if dir:
-		var total_err_count: int = 0
 		var scripts := _list_gd_files_recursive(dir, ["addons"])
-
 		for path in scripts:
 			var res := load(path)
 			if res is Script:
 				var scr: Script = res
 				var chk_res := _check_interface_define(scr)
 				if chk_res.is_checked:
+					stats.total_checked += 1
 					print("{0}".format([path]))
 					if chk_res.has_error():
-						total_err_count += 1
+						stats.error_scripts += 1
 						for ifc in chk_res.errors:
 							var err_list := chk_res.get_errors(ifc)
 							for e in err_list:
+								var msg := "[{0}] {1}".format([path.get_file(), e.as_string()])
+								stats.errors.append(msg)
 								push_error(e.as_string())
 					else:
 						print("\tNo Error")
 
-		if total_err_count > 0:
-			print("{0} script(s) with errors found.".format([total_err_count]))
-		else:
-			print("----------------- All OK -----------------")
+	_show_result_dialog(stats)
+
+
+func _show_result_dialog(stats: Dictionary) -> void:
+	var dialog := AcceptDialog.new()
+	dialog.title = "D-Interface: Validation Result"
+
+	var text := "Total scripts checked: {0}\n".format([stats.total_checked])
+	if stats.error_scripts == 0:
+		text += "All interfaces are correctly implemented! ✅"
+	else:
+		text += "Scripts with errors: {0} ❌\n\n".format([stats.error_scripts])
+		text += "Check the Output console for details."
+
+	dialog.dialog_text = text
+	get_editor_interface().get_base_control().add_child(dialog)
+	dialog.popup_centered()
+	# ダイアログが閉じられたら自動的に削除されるようにする
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
 
 
 ## @brief インターフェース定義検証処理
